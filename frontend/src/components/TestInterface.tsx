@@ -9,7 +9,7 @@ import { apiPost, apiPut } from "../services/api";
 
 interface Question {
   id: string;
-  type: "mcq" | "multiple" | "text";
+  type: "mcq" | "msq" | "multiple" | "ordering" | "text";
   question: string;
   options?: string[];
   section: string;
@@ -45,6 +45,7 @@ interface TestInterfaceProps {
   examId: string;
   testName: string;
   duration: number;
+  passingPercentage?: number;
   questions: Question[];
   onExit: () => void;
 }
@@ -54,6 +55,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   examId,
   testName,
   duration,
+  passingPercentage = 40,
   questions,
   onExit,
 }) => {
@@ -63,7 +65,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   const [answers, setAnswers] = useState<Answer[]>(
     questions.map((q) => ({
       questionId: q.id,
-      answer: q.type === "multiple" ? [] : "",
+      answer: q.type === "multiple" || q.type === "msq" || q.type === "ordering" ? [] : "",
       marked: false,
     }))
   );
@@ -259,6 +261,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
         testName={testName}
         questions={questions}
         answers={answers}
+        passingPercentage={passingPercentage}
         backendResult={submitResult}
         onBackToDashboard={onExit}
       />

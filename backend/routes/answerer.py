@@ -101,6 +101,8 @@ def list_assigned_tests():
 
     out = []
     for e in exams:
+        passing_percentage = int(e.get("passingPercentage", 40))
+
         # Get questions to calculate total marks and determine question types
         qs = list(db.questions.find({"examId": e["_id"]}))
         
@@ -134,12 +136,88 @@ def list_assigned_tests():
             "sections": e.get("sections", []),
             "status": e.get("status", "draft"),
             "totalMarks": total_marks,
-            "passingPercentage": 80,
+            "passingPercentage": passing_percentage,
             "questionTypes": question_types_str,
             "attempted": has_attempted,
         })
 
     return jsonify({"tests": to_jsonable(out)})
+
+
+@answerer_bp.get("/courses")
+def list_assigned_courses():
+    userId = (request.args.get("userId") or "").strip()
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    assignments = list(db.course_assignments.find({"userId": userId}))
+    course_ids = [a.get("courseId") for a in assignments if a.get("courseId")]
+    courses = list(db.courses.find({"_id": {"$in": course_ids}})) if course_ids else []
+
+    materials_by_course = {}
+    if course_ids:
+        materials = list(db.course_materials.find({"courseId": {"$in": course_ids}}))
+        for material in materials:
+            course_key = str(material["courseId"])
+            materials_by_course.setdefault(course_key, []).append(material)
+
+    out = []
+    for course in courses:
+        material_items = materials_by_course.get(str(course["_id"]), [])
+        out.append({
+            "id": str(course["_id"]),
+            "name": course.get("name", ""),
+            "description": course.get("description", ""),
+            "status": course.get("status", "active"),
+            "materialCount": len(material_items),
+            "daysCovered": len({int(m.get("dayNumber", 1)) for m in material_items}),
+            "createdAt": course.get("createdAt"),
+        })
+
+    out.sort(key=lambda item: item.get("name", "").lower())
+    return jsonify({"courses": to_jsonable(out)})
+
+
+@answerer_bp.get("/courses/<course_id>/materials")
+def get_course_materials(course_id: str):
+    userId = (request.args.get("userId") or "").strip()
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    try:
+        oid = ObjectId(course_id)
+    except Exception:
+        return jsonify({"error": "Invalid course id"}), 400
+
+    assigned = db.course_assignments.find_one({"courseId": oid, "userId": userId})
+    if not assigned:
+        return jsonify({"error": "Course not assigned to this user"}), 403
+
+    course = db.courses.find_one({"_id": oid})
+    if not course:
+        return jsonify({"error": "Course not found"}), 404
+
+    materials = list(db.course_materials.find({"courseId": oid}).sort([("dayNumber", 1), ("createdAt", 1)]))
+    out = []
+    for material in materials:
+        out.append({
+            "id": str(material["_id"]),
+            "dayNumber": int(material.get("dayNumber", 1)),
+            "title": material.get("title", ""),
+            "content": material.get("content", ""),
+            "createdAt": material.get("createdAt"),
+        })
+
+    return jsonify({
+        "course": to_jsonable({
+            "id": str(course["_id"]),
+            "name": course.get("name", ""),
+            "description": course.get("description", ""),
+        }),
+        "materials": to_jsonable(out),
+    })
 
 
 @answerer_bp.get("/tests/<exam_id>")
@@ -161,6 +239,8 @@ def get_test_for_taker(exam_id: str):
     exam = db.exams.find_one({"_id": oid})
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
+
+    passing_percentage = int(exam.get("passingPercentage", 40))
 
     if userId:
         assigned = db.exam_assignments.find_one({"examId": oid, "userId": userId})
@@ -203,7 +283,7 @@ def get_test_for_taker(exam_id: str):
             "sections": exam.get("sections", []),
             "questions": out_questions,
             "totalMarks": total_marks,
-            "passingPercentage": 80,
+            "passingPercentage": passing_percentage,
             "questionTypes": question_types_str,
         })
     })
@@ -316,6 +396,11 @@ def submit_attempt(attempt_id):
         return jsonify({"error": "Attempt already submitted"}), 409
 
     exam_id = attempt["examId"]
+    exam = db.exams.find_one({"_id": exam_id})
+    if not exam:
+        return jsonify({"error": "Exam not found"}), 404
+
+    passing_percentage = float(exam.get("passingPercentage", 40))
 
     questions = list(db.questions.find({"examId": exam_id}))
 
@@ -351,11 +436,15 @@ def submit_attempt(attempt_id):
 
         # Correct evaluation
         if q["type"] == "mcq":
-            is_correct = user_answer == correct_answer
+            is_correct = str(user_answer).strip() == str(correct_answer).strip()
 
-        elif q["type"] == "multiple":
+        elif q["type"] in ("multiple", "msq"):
             if isinstance(user_answer, list) and isinstance(correct_answer, list):
-                is_correct = sorted(user_answer) == sorted(correct_answer)
+                is_correct = sorted([s.strip() for s in user_answer]) == sorted([s.strip() for s in correct_answer])
+
+        elif q["type"] == "ordering":
+            if isinstance(user_answer, list) and isinstance(correct_answer, list):
+                is_correct = [s.strip() for s in user_answer] == [s.strip() for s in correct_answer]
 
         elif q["type"] == "text":
             if isinstance(user_answer, str) and isinstance(correct_answer, str):
@@ -383,7 +472,7 @@ def submit_attempt(attempt_id):
         "totalMarks": total_marks,
         "scoredMarks": scored_marks,
         "percentage": percentage,
-        "passed": percentage >= 80,
+        "passed": percentage >= passing_percentage,
         "percentile": 0,
         "sectionWise": section_wise,
         "questionReview": question_review,

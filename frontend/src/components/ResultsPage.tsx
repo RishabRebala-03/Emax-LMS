@@ -37,6 +37,7 @@ interface ResultsPageProps {
   questions: Question[];
   answers: Answer[];
   testName: string;
+  passingPercentage?: number;
   backendResult: BackendResult | null;
   onBackToDashboard: () => void;
 }
@@ -45,6 +46,7 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
   questions,
   answers,
   testName,
+  passingPercentage = 40,
   backendResult,
   onBackToDashboard,
 }) => {
@@ -76,11 +78,11 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
       totalMarks,
       scoredMarks,
       percentage,
-      passed: percentage >= 80,
+      passed: percentage >= passingPercentage,
       sectionWise,
       questionReview: [],
     };
-  }, [backendResult, questions, answers]);
+  }, [backendResult, questions, answers, passingPercentage]);
 
     const safePercentage =
       typeof results.percentage === "number" ? results.percentage : 0;

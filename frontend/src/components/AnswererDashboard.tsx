@@ -1,21 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
 import TestInterface from "./TestInterface";
+import StudentCourses from "./StudentCourses";
 import "./AnswererDashboard.css";
 import { apiGet, apiPost } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 
-type AnswererView = "dashboard" | "tests" | "history";
+type AnswererView = "dashboard" | "tests" | "history" | "courses";
 
 const viewToPath: Record<AnswererView, string> = {
   'dashboard': '/dashboard',
   'tests':     '/dashboard/tests',
   'history':   '/dashboard/history',
+  'courses':   '/dashboard/courses',
 };
 
 const pathToView: Record<string, AnswererView> = {
   '/dashboard':         'dashboard',
   '/dashboard/tests':   'tests',
   '/dashboard/history': 'history',
+  '/dashboard/courses': 'courses',
 };
 
 interface Props {
@@ -47,6 +50,7 @@ interface ExamForTaking {
   id: string;
   testName: string;
   duration: number;
+  passingPercentage?: number;
   questions: any[];
 }
 
@@ -226,6 +230,14 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
             >
               <span className="nav-icon">📝</span>
               Tests
+            </button>
+
+            <button 
+              className={`nav-item ${activeView === "courses" ? "active" : ""}`}
+              onClick={() => setActiveView("courses")}
+            >
+              <span className="nav-icon">📚</span>
+              Courses
             </button>
 
             <button 
@@ -444,6 +456,19 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
           </>
         )}
 
+        {activeView === "courses" && (
+          <>
+            <div className="dashboard-topbar">
+              <div className="dashboard-topbar-left">
+                <span className="dashboard-title">Courses</span>
+              </div>
+              <div className="dashboard-topbar-right">{today}</div>
+            </div>
+
+            <StudentCourses userId={userName} />
+          </>
+        )}
+
         {activeView === "tests" && (
           <div className="tests-wrapper">
             {!activeExam ? (
@@ -536,6 +561,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 examId={activeExam.id}
                 testName={activeExam.testName}
                 duration={activeExam.duration}
+                passingPercentage={activeExam.passingPercentage}
                 questions={activeExam.questions}
                 onExit={exitExam}
               />

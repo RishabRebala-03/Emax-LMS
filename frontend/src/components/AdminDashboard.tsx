@@ -5,11 +5,12 @@ import TestEditor from './TestEditor';
 import TestList from './TestList';
 import TestResults from './TestResults';
 import DataMaintenance from './DataMaintenance';
+import CourseManagement from './CourseManagement';
 import './AdminDashboard.css';
 import { apiGet } from '../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-type AdminView = 'dashboard' | 'users' | 'create-test' | 'edit-test' | 'tests' | 'results' | 'data-maintenance';
+type AdminView = 'dashboard' | 'users' | 'create-test' | 'edit-test' | 'tests' | 'results' | 'data-maintenance' | 'courses';
 
 const viewToPath: Record<AdminView, string> = {
   'dashboard':        '/admin',
@@ -19,6 +20,7 @@ const viewToPath: Record<AdminView, string> = {
   'edit-test':        '/admin/tests/edit',
   'results':          '/admin/results',
   'data-maintenance': '/admin/data-maintenance',
+  'courses':          '/admin/courses',
 };
 
 const pathToView: Record<string, AdminView> = {
@@ -29,6 +31,7 @@ const pathToView: Record<string, AdminView> = {
   '/admin/tests/edit':        'edit-test',
   '/admin/results':           'results',
   '/admin/data-maintenance':  'data-maintenance',
+  '/admin/courses':           'courses',
 };
 
 interface AdminDashboardProps {
@@ -102,6 +105,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
         return <TestResults />;
       case 'data-maintenance':
         return <DataMaintenance />;
+      case 'courses':
+        return <CourseManagement />;
       default:
         return (
           <>
@@ -187,6 +192,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
           >
             <span className="nav-icon">📈</span>
             Test Results
+          </button>
+          <button
+            className={`nav-item ${currentView === 'courses' ? 'active' : ''}`}
+            onClick={() => setCurrentView('courses')}
+          >
+            <span className="nav-icon">📚</span>
+            Courses
           </button>
           <button
             className={`nav-item ${currentView === 'data-maintenance' ? 'active' : ''}`}
