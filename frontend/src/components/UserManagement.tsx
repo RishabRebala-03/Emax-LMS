@@ -198,7 +198,19 @@ const ALL_COLS: ColDef[] = [
 ];
 
 const DEFAULT_COL_KEYS: (keyof User)[] = [
-  "naxUnid", "name", "userId", "collegeName", "courseStream", "cgpa", "isActive", "createdAt",
+  "naxUnid",
+  "name",
+  "studentId",
+  "userId",
+  "email",
+  "collegeEmail",
+  "mobile",
+  "collegeName",
+  "courseStream",
+  "cgpa",
+  "sapCertification",
+  "isActive",
+  "createdAt",
 ];
 
 // ─── Export helpers ───────────────────────────────────────────────────────────

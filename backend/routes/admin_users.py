@@ -2,11 +2,41 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
 from bson import ObjectId
+from typing import Optional
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
 
 admin_users_bp = Blueprint("admin_users", __name__)
+
+
+def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict:
+    if not registration:
+        return user
+
+    merged = dict(user)
+    field_map = {
+        "naxUnid": "naxUnid",
+        "studentName": "name",
+        "studentId": "studentId",
+        "email": "email",
+        "collegeEmail": "collegeEmail",
+        "mobile": "mobile",
+        "gender": "gender",
+        "courseStream": "courseStream",
+        "cgpa": "cgpa",
+        "sapCertification": "sapCertification",
+        "collegeName": "collegeName",
+    }
+
+    for reg_key, user_key in field_map.items():
+        if merged.get(user_key) in (None, ""):
+            merged[user_key] = registration.get(reg_key)
+
+    if merged.get("collegeRollNumber") in (None, "") and registration.get("studentId"):
+        merged["collegeRollNumber"] = registration.get("studentId")
+
+    return merged
 
 # =========================
 # LIST USERS
@@ -18,24 +48,38 @@ def list_users():
     users = list(db.users.find({"role": "answerer"}, {"password": 0}))
     out = []
     for u in users:
+        reg = None
+        lookup_keys = [u.get("naxUnid"), u.get("userId"), u.get("studentId"), u.get("email")]
+        for key in filter(None, lookup_keys):
+            reg = db.student_registrations.find_one({
+                "$or": [
+                    {"naxUnid": key},
+                    {"studentId": key},
+                    {"email": str(key).strip().lower()},
+                ]
+            })
+            if reg:
+                break
+
+        merged = _merge_registration_fields(u, reg)
         out.append({
-            "id": str(u["_id"]),
-            "name": u.get("name"),
-            "email": u.get("email"),
-            "userId": u.get("userId"),
-            "role": u.get("role"),
-            "createdAt": u.get("createdAt"),
-            "isActive": u.get("isActive", True),
-            "naxUnid": u.get("naxUnid"),
-            "mobile": u.get("mobile"),
-            "gender": u.get("gender"),
-            "collegeName": u.get("collegeName"),
-            "collegeEmail": u.get("collegeEmail"),
-            "collegeRollNumber": u.get("collegeRollNumber"),
-            "courseStream": u.get("courseStream"),
-            "cgpa": u.get("cgpa"),
-            "sapCertification": u.get("sapCertification"),
-            "studentId": u.get("studentId"),
+            "id": str(merged["_id"]),
+            "name": merged.get("name"),
+            "email": merged.get("email"),
+            "userId": merged.get("userId"),
+            "role": merged.get("role"),
+            "createdAt": merged.get("createdAt"),
+            "isActive": merged.get("isActive", True),
+            "naxUnid": merged.get("naxUnid"),
+            "mobile": merged.get("mobile"),
+            "gender": merged.get("gender"),
+            "collegeName": merged.get("collegeName"),
+            "collegeEmail": merged.get("collegeEmail"),
+            "collegeRollNumber": merged.get("collegeRollNumber"),
+            "courseStream": merged.get("courseStream"),
+            "cgpa": merged.get("cgpa"),
+            "sapCertification": merged.get("sapCertification"),
+            "studentId": merged.get("studentId"),
         })
     return jsonify({"users": to_jsonable(out)})
 
