@@ -2,6 +2,12 @@
 
 Integrated learning, assessment, candidate management, and onboarding platform designed to streamline the complete candidate journey from registration to evaluation and offer generation.
 
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)
+![Flask](https://img.shields.io/badge/Flask-Python-black?logo=flask)
+![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker)
+
 ---
 
 ## Overview
