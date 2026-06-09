@@ -4,6 +4,7 @@ import StudentCourses from "./StudentCourses";
 import "./AnswererDashboard.css";
 import { apiGet, apiPost } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
+import AppIcon from "./AppIcons";
 
 type AnswererView = "dashboard" | "tests" | "history" | "courses";
 
@@ -220,7 +221,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               className={`nav-item ${activeView === "dashboard" ? "active" : ""}`}
               onClick={() => setActiveView("dashboard")}
             >
-              <span className="nav-icon">📊</span>
+              <AppIcon name="dashboard" className="nav-icon" />
               Dashboard
             </button>
 
@@ -228,7 +229,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               className={`nav-item ${activeView === "tests" ? "active" : ""}`}
               onClick={() => setActiveView("tests")}
             >
-              <span className="nav-icon">📝</span>
+              <AppIcon name="tests" className="nav-icon" />
               Tests
             </button>
 
@@ -236,7 +237,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               className={`nav-item ${activeView === "courses" ? "active" : ""}`}
               onClick={() => setActiveView("courses")}
             >
-              <span className="nav-icon">📚</span>
+              <AppIcon name="courses" className="nav-icon" />
               Courses
             </button>
 
@@ -244,7 +245,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               className={`nav-item ${activeView === "history" ? "active" : ""}`}
               onClick={() => setActiveView("history")}
             >
-              <span className="nav-icon">📜</span>
+              <AppIcon name="history" className="nav-icon" />
               History
             </button>
           </nav>
@@ -282,12 +283,14 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
             </div>
 
             <div>
-              <h2>Welcome back, {userName} 👋</h2>
+              <h2>Welcome back, {userName}</h2>
               <p className="subtitle">Track your progress and manage your tests</p>
 
               <div className="stats-grid">
                 <div className="stat-card">
-                  <div className="stat-icon">📝</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="tests" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Tests Taken</h3>
                     <p className="stat-number">{insights.testsTaken}</p>
@@ -295,7 +298,9 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 </div>
 
                 <div className="stat-card">
-                  <div className="stat-icon">✅</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="completed" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Tests Passed</h3>
                     <p className="stat-number">{insights.testsPassed}</p>
@@ -303,7 +308,9 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 </div>
 
                 <div className="stat-card">
-                  <div className="stat-icon">📊</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="score" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Average Score</h3>
                     <p className="stat-number">{insights.avgScore.toFixed(1)}%</p>
@@ -311,7 +318,9 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 </div>
 
                 <div className="stat-card">
-                  <div className="stat-icon">🏆</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="trophy" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Best Score</h3>
                     <p className="stat-number">{insights.bestScore.toFixed(1)}%</p>
@@ -319,7 +328,9 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 </div>
 
                 <div className="stat-card">
-                  <div className="stat-icon">🔥</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="streak" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Current Streak</h3>
                     <p className="stat-number">{insights.streak}</p>
@@ -423,7 +434,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                       <div className="history-card-header">
                         <h3>{item.testName}</h3>
                         <span className={`status-badge ${item.passed ? 'passed' : 'failed'}`}>
-                          {item.passed ? '✓ Passed' : '✗ Failed'}
+                          {item.passed ? 'Passed' : 'Failed'}
                         </span>
                       </div>
 

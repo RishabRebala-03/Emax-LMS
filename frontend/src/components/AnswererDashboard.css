@@ -80,7 +80,9 @@
 }
 
 .nav-icon {
-  font-size: 1.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: 0 0 auto;
 }
 
 .sidebar-footer {
@@ -175,7 +177,6 @@
 }
 
 .stat-icon {
-  font-size: 2rem;
   width: 3rem;
   height: 3rem;
   display: flex;
@@ -183,6 +184,12 @@
   justify-content: center;
   background: #ebf5ff;
   border-radius: 0.5rem;
+  color: #0070f2;
+}
+
+.stat-icon-svg {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .stat-info h3 {

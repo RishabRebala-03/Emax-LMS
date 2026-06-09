@@ -9,6 +9,16 @@ def _normalize_answer(ans):
     return str(ans).strip()
 
 
+def _normalize_sequence(ans):
+    if not isinstance(ans, list):
+        return []
+    return [str(a).strip() for a in ans]
+
+
+def _is_multiple_choice(q: Dict[str, Any]) -> bool:
+    return isinstance(q.get("correctAnswer"), list)
+
+
 def compute_result(
     questions: List[Dict[str, Any]],
     answers: List[Dict[str, Any]],
@@ -22,8 +32,10 @@ def compute_result(
 
     q_by_id: Dict[str, Dict[str, Any]] = {}
     for q in questions:
-        qid = str(q.get("id") or q.get("questionId") or q.get("_id"))
-        q_by_id[qid] = q
+        ids = [q.get("id"), q.get("questionId"), q.get("qid"), q.get("_id")]
+        for raw_id in ids:
+            if raw_id is not None:
+                q_by_id[str(raw_id)] = q
 
     total_marks = 0
     scored_marks = 0
@@ -33,24 +45,42 @@ def compute_result(
 
     review: List[Dict[str, Any]] = []
 
+    counted_questions = set()
     for qid, q in q_by_id.items():
+        canonical_qid = str(q.get("id") or q.get("questionId") or q.get("qid") or q.get("_id"))
+        if canonical_qid in counted_questions:
+            continue
+        counted_questions.add(canonical_qid)
+
         marks = int(q.get("marks", 0))
         section = q.get("section", "General")
         total_marks += marks
         section_totals[section] = section_totals.get(section, 0) + marks
 
+    answers_by_qid: Dict[str, Dict[str, Any]] = {}
     for a in answers:
         qid = str(a.get("questionId"))
-        q = q_by_id.get(qid)
-        if not q:
-            # ignore answers that don't map
-            continue
+        if qid:
+            answers_by_qid[qid] = a
 
+    seen_questions = set()
+    for qid, q in q_by_id.items():
+        canonical_qid = str(q.get("id") or q.get("questionId") or q.get("qid") or q.get("_id"))
+        if canonical_qid in seen_questions:
+            continue
+        seen_questions.add(canonical_qid)
+
+        answer_doc = answers_by_qid.get(canonical_qid, {})
         correct = q.get("correctAnswer")
-        user_ans = a.get("answer")
+        user_ans = answer_doc.get("answer")
 
         is_correct = False
-        if q.get("type") == "multiple":
+        qtype = q.get("type")
+        if qtype == "ordering":
+            is_correct = _normalize_sequence(user_ans) == _normalize_sequence(correct)
+        elif qtype == "text":
+            is_correct = _normalize_answer(user_ans).lower() == _normalize_answer(correct).lower()
+        elif _is_multiple_choice(q):
             is_correct = _normalize_answer(user_ans) == _normalize_answer(correct)
         else:
             is_correct = _normalize_answer(user_ans) == _normalize_answer(correct)
@@ -66,16 +96,16 @@ def compute_result(
 
         review.append(
             {
-                "questionId": qid,
+                "questionId": canonical_qid,
                 "question": q.get("question"),
-                "type": q.get("type"),
+                "type": qtype,
                 "section": section,
-                "marks": marks,
+                "marks": marks if is_correct else 0,
                 "options": q.get("options", []),
                 "correctAnswer": correct,
                 "userAnswer": user_ans,
                 "isCorrect": is_correct,
-                "marked": bool(a.get("marked", False)),
+                "marked": bool(answer_doc.get("marked", False)),
             }
         )
 

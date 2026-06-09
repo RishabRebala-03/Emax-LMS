@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./TestList.css";
 import { apiDelete, apiGet, apiPost } from "../services/api";
 
@@ -21,6 +21,11 @@ interface User {
   id: string;
   name: string;
   userId: string;
+  email?: string;
+  isActive?: boolean;
+  collegeName?: string;
+  courseStream?: string;
+  gender?: string;
 }
 
 interface TestListProps {
@@ -35,6 +40,10 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [assigningTest, setAssigningTest] = useState<Test | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [streamFilter, setStreamFilter] = useState("");
+  const [collegeFilter, setCollegeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
 
   const loadTests = async () => {
     setLoading(true);
@@ -72,14 +81,49 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     loadUsers();
   }, []);
 
+  const availableStreams = useMemo(
+    () => Array.from(new Set(allUsers.map((user) => user.courseStream).filter(Boolean) as string[])).sort(),
+    [allUsers]
+  );
+
+  const availableColleges = useMemo(
+    () => Array.from(new Set(allUsers.map((user) => user.collegeName).filter(Boolean) as string[])).sort(),
+    [allUsers]
+  );
+
+  const filteredUsers = useMemo(() => {
+    const term = studentSearch.trim().toLowerCase();
+    return allUsers.filter((user) => {
+      const matchesStatus =
+        statusFilter === "all" ? true : statusFilter === "active" ? user.isActive !== false : user.isActive === false;
+      const matchesStream = streamFilter ? user.courseStream === streamFilter : true;
+      const matchesCollege = collegeFilter ? user.collegeName === collegeFilter : true;
+      const haystack = [user.name, user.userId, user.email, user.courseStream, user.collegeName, user.gender]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = term ? haystack.includes(term) : true;
+      return matchesStatus && matchesStream && matchesCollege && matchesSearch;
+    });
+  }, [allUsers, studentSearch, streamFilter, collegeFilter, statusFilter]);
+
+  const filteredUserIds = useMemo(
+    () => filteredUsers.map((user) => user.userId),
+    [filteredUsers]
+  );
+
+  const allSelected =
+    filteredUserIds.length > 0 && filteredUserIds.every((userId) => selectedUserIds.includes(userId));
+  const someSelected =
+    filteredUserIds.some((userId) => selectedUserIds.includes(userId)) && !allSelected;
+
   const handleSelectAll = () => {
-    if (selectedUserIds.length === allUsers.length) {
-      // If all are selected, deselect all
-      setSelectedUserIds([]);
-    } else {
-      // Select all users
-      setSelectedUserIds(allUsers.map(user => user.userId));
-    }
+    setSelectedUserIds((prev) => {
+      if (allSelected) {
+        return prev.filter((userId) => !filteredUserIds.includes(userId));
+      }
+      return Array.from(new Set([...prev, ...filteredUserIds]));
+    });
   };
 
   const deleteTest = async (id: string) => {
@@ -116,9 +160,6 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
         return "";
     }
   };
-
-  const allSelected = allUsers.length > 0 && selectedUserIds.length === allUsers.length;
-  const someSelected = selectedUserIds.length > 0 && selectedUserIds.length < allUsers.length;
 
   return (
     <div className="test-list" style={{ paddingTop: '2rem' }}>
@@ -184,11 +225,15 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
                 Edit
               </button>
 
-              <button
+              <button 
                 className="action-btn edit-btn"
                 onClick={() => {
                   setAssigningTest(test);
                   setSelectedUserIds([]);
+                  setStudentSearch("");
+                  setStreamFilter("");
+                  setCollegeFilter("");
+                  setStatusFilter("active");
                 }}
               >
                 Assign
@@ -284,38 +329,51 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
 
               {/* Select All Section */}
               {allUsers.length > 0 && (
-                <div style={{
-                  marginBottom: "1rem",
-                  paddingBottom: "1rem",
-                  borderBottom: "2px solid #e9ecef"
-                }}>
-                  <label style={{
-                    display: "flex",
-                    alignItems: "center",
-                    fontWeight: 500,
-                    cursor: "pointer"
-                  }}>
+                <div className="assign-filter-wrap">
+                  <div className="assign-filter-grid">
+                    <input
+                      type="text"
+                      value={studentSearch}
+                      onChange={(e) => setStudentSearch(e.target.value)}
+                      placeholder="Search by name, user ID, email, stream, college"
+                    />
+                    <select value={streamFilter} onChange={(e) => setStreamFilter(e.target.value)}>
+                      <option value="">All Streams</option>
+                      {availableStreams.map((stream) => (
+                        <option key={stream} value={stream}>
+                          {stream}
+                        </option>
+                      ))}
+                    </select>
+                    <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)}>
+                      <option value="">All Colleges</option>
+                      {availableColleges.map((college) => (
+                        <option key={college} value={college}>
+                          {college}
+                        </option>
+                      ))}
+                    </select>
+                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "active" | "inactive" | "all")}>
+                      <option value="active">Active Only</option>
+                      <option value="inactive">Inactive Only</option>
+                      <option value="all">All Students</option>
+                    </select>
+                  </div>
+                  <div className="assign-selection-meta">
+                    <span>{filteredUsers.length} students shown</span>
+                  </div>
+                  <label className="assign-select-all">
                     <input
                       type="checkbox"
                       checked={allSelected}
-                      ref={input => {
+                      ref={(input) => {
                         if (input) {
                           input.indeterminate = someSelected;
                         }
                       }}
                       onChange={handleSelectAll}
-                      style={{
-                        width: "1.125rem",
-                        height: "1.125rem",
-                        marginRight: "0.75rem",
-                        cursor: "pointer",
-                        accentColor: "#0070f2"
-                      }}
                     />
-                    <span style={{
-                      fontWeight: 500,
-                      color: "#0070f2"
-                    }}>
+                    <span className="assign-select-all-text">
                       {allSelected ? 'Deselect All' : 'Select All'}
                       {selectedUserIds.length > 0 && ` (${selectedUserIds.length} selected)`}
                     </span>
@@ -325,7 +383,7 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
 
               {/* User List */}
               <div className="assign-user-list">
-                {allUsers.map((user) => (
+                {filteredUsers.map((user) => (
                   <label
                     key={user.userId}
                     className="assign-user-row"
@@ -343,11 +401,15 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
                         }
                       }}
                     />
-                    <span style={{ marginLeft: "0.5rem" }}>
-                      {user.name} ({user.userId})
-                    </span>
+                    <div className="assign-user-copy">
+                      <span>{user.name} ({user.userId})</span>
+                      <small>{user.courseStream || "No stream"} | {user.collegeName || "No college"}</small>
+                    </div>
                   </label>
                 ))}
+                {filteredUsers.length === 0 && (
+                  <p className="assign-empty-state">No students match the current filters.</p>
+                )}
               </div>
             </div>
 

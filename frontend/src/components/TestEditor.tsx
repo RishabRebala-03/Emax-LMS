@@ -26,11 +26,13 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [testName, setTestName] = useState('');
   const [duration, setDuration] = useState(60);
+  const [passingPercentage, setPassingPercentage] = useState(40);
   const [sections, setSections] = useState<Section[]>([
     { id: 'general', name: 'General' }
   ]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [newSection, setNewSection] = useState('');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
 
@@ -56,6 +58,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       
       setTestName(test.testName || test.name || '');
       setDuration(test.duration || 60);
+      setPassingPercentage(test.passingPercentage || 40);
       
       // Convert sections from backend format to {id, name} format
       const normalizedSections = (test.sections || ['General'])
@@ -166,8 +169,9 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       }
     }
 
+    const nextQuestionId = editingQuestionId || Date.now().toString();
     const newQuestion: Question = {
-      id: Date.now().toString(),
+      id: nextQuestionId,
       type: questionForm.type,
       question: questionForm.question,
       section: questionForm.section,
@@ -186,7 +190,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       newQuestion.correctAnswer = questionForm.correctAnswer;
     }
 
-    setQuestions([...questions, newQuestion]);
+    if (editingQuestionId) {
+      setQuestions(questions.map((q) => (q.id === editingQuestionId ? newQuestion : q)));
+    } else {
+      setQuestions([...questions, newQuestion]);
+    }
     setQuestionForm({
       type: 'mcq',
       question: '',
@@ -196,11 +204,25 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       section: sections[0]?.id || '',
       marks: 1,
     });
+    setEditingQuestionId(null);
     setShowQuestionForm(false);
   };
 
   const deleteQuestion = (id: string) => {
     setQuestions(questions.filter(q => q.id !== id));
+    if (editingQuestionId === id) {
+      setEditingQuestionId(null);
+      setShowQuestionForm(false);
+      setQuestionForm({
+        type: 'mcq',
+        question: '',
+        options: ['', ''],
+        correctAnswer: '',
+        correctAnswers: [],
+        section: sections[0]?.id || '',
+        marks: 1,
+      });
+    }
   };
 
   const handleOptionChange = (index: number, value: string) => {
@@ -228,6 +250,34 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     return questions.filter(q => q.section === sectionId);
   };
 
+  const handleEditQuestion = (question: Question) => {
+    setEditingQuestionId(question.id);
+    setQuestionForm({
+      type: question.type,
+      question: question.question,
+      options: question.options && question.options.length > 0 ? [...question.options] : ['', ''],
+      correctAnswer: typeof question.correctAnswer === 'string' ? question.correctAnswer : '',
+      correctAnswers: Array.isArray(question.correctAnswer) ? [...question.correctAnswer] : [],
+      section: question.section,
+      marks: question.marks,
+    });
+    setShowQuestionForm(true);
+  };
+
+  const resetQuestionForm = () => {
+    setEditingQuestionId(null);
+    setQuestionForm({
+      type: 'mcq',
+      question: '',
+      options: ['', ''],
+      correctAnswer: '',
+      correctAnswers: [],
+      section: sections[0]?.id || '',
+      marks: 1,
+    });
+    setShowQuestionForm(false);
+  };
+
   const handleUpdateTest = async () => {
     if (!testName.trim()) {
       alert("Test name is required");
@@ -236,6 +286,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
 
     if (questions.length === 0) {
       alert("Add at least one question before updating the test");
+      return;
+    }
+
+    if (passingPercentage < 1 || passingPercentage > 100) {
+      alert("Passing score must be between 1 and 100");
       return;
     }
 
@@ -255,6 +310,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       await apiPut(`/admin/exams/${testId}`, {
         testName,
         duration,
+        passingPercentage,
         sections: sectionNames,
         questions: questionsWithSectionNames,
       });
@@ -305,6 +361,17 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
               placeholder="60"
+            />
+          </div>
+          <div className="form-group">
+            <label>Passing Score (%) *</label>
+            <input
+              type="number"
+              value={passingPercentage}
+              onChange={(e) => setPassingPercentage(Number(e.target.value))}
+              placeholder="40"
+              min="1"
+              max="100"
             />
           </div>
         </div>
@@ -391,7 +458,14 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
           <h3>Questions ({questions.length})</h3>
           <button
             className="primary-btn"
-            onClick={() => setShowQuestionForm(!showQuestionForm)}
+            onClick={() => {
+              if (showQuestionForm && !editingQuestionId) {
+                resetQuestionForm();
+                return;
+              }
+              setEditingQuestionId(null);
+              setShowQuestionForm(!showQuestionForm);
+            }}
           >
             {showQuestionForm ? 'Cancel' : '+ Add Question'}
           </button>
@@ -523,7 +597,10 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
 
             <div className="form-actions">
               <button className="primary-btn" onClick={addQuestion}>
-                Add Question
+                {editingQuestionId ? 'Update Question' : 'Add Question'}
+              </button>
+              <button className="secondary-btn" onClick={resetQuestionForm}>
+                Cancel
               </button>
             </div>
           </div>
@@ -543,6 +620,14 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
                       <span className="question-number">Q{index + 1}</span>
                       <span className="question-type">{q.type.toUpperCase()}</span>
                       <span className="question-marks">{q.marks} marks</span>
+                      <button
+                        className="icon-btn"
+                        type="button"
+                        title="Edit question"
+                        onClick={() => handleEditQuestion(q)}
+                      >
+                        Edit
+                      </button>
                       <button
                         className="delete-icon"
                         onClick={() => deleteQuestion(q.id)}

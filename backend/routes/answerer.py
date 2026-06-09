@@ -255,10 +255,10 @@ def get_test_for_taker(exam_id: str):
     question_types = set()
     for q in qs:
         qtype = q.get("type", "")
-        if qtype == "mcq":
-            question_types.add("MCQ")
-        elif qtype == "multiple":
+        if isinstance(q.get("correctAnswer"), list) or qtype in ("multiple", "msq"):
             question_types.add("Multiple Choice")
+        elif qtype == "mcq":
+            question_types.add("MCQ")
         elif qtype == "text":
             question_types.add("Text")
     
@@ -271,6 +271,9 @@ def get_test_for_taker(exam_id: str):
             "type": q.get("type"),
             "question": q.get("question"),
             "options": q.get("options", []),
+            # Preserve only the answer shape so the client can safely detect
+            # multi-select questions without leaking the actual correct answer.
+            "correctAnswer": [] if isinstance(q.get("correctAnswer"), list) else "",
             "section": q.get("section"),
             "marks": int(q.get("marks", 0)),
         })
@@ -404,75 +407,34 @@ def submit_attempt(attempt_id):
 
     questions = list(db.questions.find({"examId": exam_id}))
 
-    total_marks = 0
-    scored_marks = 0
-    section_wise = {}
-    question_review = []
-
-    # Map questions by BOTH qid and _id
-    qmap = {}
-    for q in questions:
-        if q.get("qid"):
-            qmap[str(q["qid"])] = q
-        qmap[str(q["_id"])] = q
-
-    for ans in answers:
-        qid = str(ans.get("questionId"))
-        user_answer = ans.get("answer")
-
-        q = qmap.get(qid)
-        if not q:
-            continue  # skip invalid mapping
-
-        correct_answer = q.get("correctAnswer")
-        q_marks = int(q.get("marks", 0))
-        section = q.get("section")
-
-        total_marks += q_marks
-        section_wise.setdefault(section, {"total": 0, "scored": 0})
-        section_wise[section]["total"] += q_marks
-
-        is_correct = False
-
-        # Correct evaluation
-        if q["type"] == "mcq":
-            is_correct = str(user_answer).strip() == str(correct_answer).strip()
-
-        elif q["type"] in ("multiple", "msq"):
-            if isinstance(user_answer, list) and isinstance(correct_answer, list):
-                is_correct = sorted([s.strip() for s in user_answer]) == sorted([s.strip() for s in correct_answer])
-
-        elif q["type"] == "ordering":
-            if isinstance(user_answer, list) and isinstance(correct_answer, list):
-                is_correct = [s.strip() for s in user_answer] == [s.strip() for s in correct_answer]
-
-        elif q["type"] == "text":
-            if isinstance(user_answer, str) and isinstance(correct_answer, str):
-                is_correct = user_answer.strip().lower() == correct_answer.strip().lower()
-
-        earned = q_marks if is_correct else 0
-        scored_marks += earned
-        section_wise[section]["scored"] += earned
-
-        question_review.append({
-            "questionId": qid,
-            "isCorrect": is_correct,
-            "userAnswer": user_answer,
-            "correctAnswer": correct_answer,
-            "marks": earned,
-            "section": section,
-        })
-
-    percentage = (scored_marks / total_marks) * 100 if total_marks else 0
+    computed = compute_result(questions, answers, passing_percentage)
+    section_wise = {
+        item["section"]: {
+            "total": item["totalMarks"],
+            "scored": item["scoredMarks"],
+        }
+        for item in computed["sectionBreakdown"]
+    }
+    question_review = [
+        {
+            "questionId": item["questionId"],
+            "isCorrect": item["isCorrect"],
+            "userAnswer": item["userAnswer"],
+            "correctAnswer": item["correctAnswer"],
+            "marks": item["marks"],
+            "section": item["section"],
+        }
+        for item in computed["review"]
+    ]
 
     result_doc = {
         "attemptId": attempt_id,
         "examId": exam_id,
         "userId": attempt["userId"],
-        "totalMarks": total_marks,
-        "scoredMarks": scored_marks,
-        "percentage": percentage,
-        "passed": percentage >= passing_percentage,
+        "totalMarks": computed["totalMarks"],
+        "scoredMarks": computed["scoredMarks"],
+        "percentage": computed["percentage"],
+        "passed": computed["passed"],
         "percentile": 0,
         "sectionWise": section_wise,
         "questionReview": question_review,

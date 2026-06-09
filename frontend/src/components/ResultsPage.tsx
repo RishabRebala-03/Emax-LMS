@@ -3,9 +3,10 @@ import "./ResultsPage.css";
 
 interface Question {
   id: string;
-  type: "mcq" | "multiple" | "text";
+  type: "mcq" | "msq" | "multiple" | "ordering" | "text";
   question: string;
   options?: string[];
+  correctAnswer?: string | string[];
   section: string;
   marks: number;
 }

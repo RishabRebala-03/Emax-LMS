@@ -6,6 +6,7 @@ interface Question {
   type: 'mcq' | 'msq' | 'multiple' | 'ordering' | 'text';
   question: string;
   options?: string[];
+  correctAnswer?: string | string[];
   section: string;
   marks: number;
 }
@@ -26,7 +27,8 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
   answer,
   onAnswer,
 }) => {
-  // Ordering state — initialize from current answer or fall back to shuffled options
+  const isMultipleChoice = Array.isArray(question.correctAnswer);
+
   const [orderedItems, setOrderedItems] = useState<string[]>(() => {
     if (question.type === 'ordering') {
       if (Array.isArray(answer) && answer.length > 0) return answer as string[];
@@ -37,7 +39,6 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-  // Reset ordered items when question changes
   useEffect(() => {
     if (question.type === 'ordering') {
       if (Array.isArray(answer) && answer.length > 0) {
@@ -46,27 +47,28 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         setOrderedItems(question.options ? [...question.options] : []);
       }
     }
-  }, [question.id]);
+  }, [answer, question.id, question.options, question.type]);
 
   const handleOptionClick = (option: string) => {
-    if (question.type === 'mcq') {
-      onAnswer(option);
-    } else if (question.type === 'multiple' || question.type === 'msq') {
+    if (isMultipleChoice) {
       const currentAnswers = Array.isArray(answer) ? answer : [];
       if (currentAnswers.includes(option)) {
-        onAnswer(currentAnswers.filter(a => a !== option));
+        onAnswer(currentAnswers.filter((a) => a !== option));
       } else {
         onAnswer([...currentAnswers, option]);
       }
+      return;
     }
+
+    onAnswer(option);
   };
 
-  // Drag handlers for ordering
   const handleDragStart = (index: number) => setDragIndex(index);
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (dragIndex === null || dragIndex === index) return;
+
     const updated = [...orderedItems];
     const [moved] = updated.splice(dragIndex, 1);
     updated.splice(index, 0, moved);
@@ -84,8 +86,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         <p className="question-text prewrap">{question.question}</p>
       </div>
 
-      {/* MCQ */}
-      {question.type === 'mcq' && question.options && (
+      {question.options && question.type !== 'ordering' && question.type !== 'text' && !isMultipleChoice && (
         <div className="options-list">
           {question.options.map((option, index) => (
             <label key={index} className="option-item-label">
@@ -103,8 +104,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         </div>
       )}
 
-      {/* MSQ (multiple select) */}
-      {question.type === 'msq' && question.options && (
+      {question.options && question.type !== 'ordering' && question.type !== 'text' && isMultipleChoice && (
         <>
           <p className="note-text">Note: There are multiple correct answers to this question.</p>
           <div className="options-list">
@@ -128,32 +128,6 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         </>
       )}
 
-      {/* Legacy "multiple" type — keep for backward compatibility */}
-      {question.type === 'multiple' && question.options && (
-        <>
-          <p className="note-text">Note: There are multiple correct answers to this question.</p>
-          <div className="options-list">
-            {question.options.map((option, index) => {
-              const isSelected = Array.isArray(answer) && answer.includes(option);
-              return (
-                <label key={index} className="option-item-label">
-                  <input
-                    type="checkbox"
-                    name={`question-${question.id}`}
-                    value={option}
-                    checked={isSelected}
-                    onChange={() => handleOptionClick(option)}
-                    className="option-checkbox"
-                  />
-                  <span className="option-text">{option}</span>
-                </label>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* ORDERING — drag and drop */}
       {question.type === 'ordering' && (
         <>
           <p className="note-text">Note: Drag and drop the options to arrange them in the correct order.</p>
@@ -167,7 +141,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
               >
-                <span className="ordering-handle">☰</span>
+                <span className="ordering-handle">::</span>
                 <span className="ordering-index">{index + 1}.</span>
                 <span className="option-text">{item}</span>
               </div>
@@ -176,7 +150,6 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         </>
       )}
 
-      {/* TEXT */}
       {question.type === 'text' && (
         <textarea
           className="text-answer"

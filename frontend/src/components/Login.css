@@ -146,9 +146,11 @@ body {
 }
 
 .role-icon {
-  font-size: 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
   position: relative;
   z-index: 1;
+  flex: 0 0 auto;
 }
 
 .role-label {
@@ -281,7 +283,9 @@ body {
 }
 
 .security-icon {
-  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 480px) {

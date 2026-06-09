@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './TestResults.css';
 import { apiGet } from '../services/api';
 
@@ -53,11 +53,165 @@ interface Question {
   question: string;
   type: string;
   options?: string[];
+  correctAnswer?: string | string[];
   section: string;
   marks: number;
 }
 
+interface ValueHelpOption {
+  value: string;
+  label: string;
+  keywords?: string[];
+}
+
+interface ValueHelpFieldProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  options: ValueHelpOption[];
+  onChange: (value: string) => void;
+  allowFreeText?: boolean;
+  compact?: boolean;
+}
+
 type View = 'tests' | 'users' | 'details';
+type TestAttemptsFilter = 'all' | 'with-attempts' | 'without-attempts';
+type PassRateBand = 'all' | 'excellent' | 'good' | 'watch' | 'poor';
+type DurationBand = 'all' | 'short' | 'medium' | 'long';
+type ScoreBand = 'all' | 'topper' | 'strong' | 'average' | 'at-risk';
+type TimeSpentBand = 'all' | 'quick' | 'balanced' | 'slow';
+type DateFilter = 'all' | 'today' | 'last7' | 'last30';
+type UserSort = 'score-high' | 'score-low' | 'name' | 'date' | 'time-fast' | 'time-slow';
+
+const formatDurationBand = (minutes: number) => {
+  if (minutes <= 30) return 'short';
+  if (minutes <= 60) return 'medium';
+  return 'long';
+};
+
+const formatPassRateBand = (passRate: number) => {
+  if (passRate >= 80) return 'excellent';
+  if (passRate >= 60) return 'good';
+  if (passRate >= 40) return 'watch';
+  return 'poor';
+};
+
+const formatScoreBand = (percentage: number) => {
+  if (percentage >= 85) return 'topper';
+  if (percentage >= 70) return 'strong';
+  if (percentage >= 50) return 'average';
+  return 'at-risk';
+};
+
+const formatTimeSpentBand = (seconds: number) => {
+  if (seconds < 15 * 60) return 'quick';
+  if (seconds <= 45 * 60) return 'balanced';
+  return 'slow';
+};
+
+const ValueHelpField: React.FC<ValueHelpFieldProps> = ({
+  label,
+  placeholder,
+  value,
+  options,
+  onChange,
+  allowFreeText = false,
+  compact = false,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return options;
+
+    return options.filter((option) => {
+      const haystack = [option.label, option.value, ...(option.keywords || [])].join(' ').toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [options, query]);
+
+  const displayLabel = useMemo(() => {
+    const match = options.find((option) => option.value === value);
+    return match?.label || value;
+  }, [options, value]);
+
+  return (
+    <div ref={wrapperRef} className={`value-help-field ${compact ? 'compact' : ''}`}>
+      <label className="value-help-label">{label}</label>
+      <div className={`value-help-trigger-row ${open ? 'open' : ''}`} onClick={() => setOpen(true)}>
+        <input
+          className="value-help-input"
+          type="text"
+          value={allowFreeText ? value : displayLabel}
+          placeholder={placeholder}
+          readOnly={!allowFreeText}
+          onChange={(e) => allowFreeText && onChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setOpen(true);
+            }
+            if (e.key === 'Escape') {
+              setOpen(false);
+            }
+          }}
+        />
+        <span className="value-help-chevron" aria-hidden="true">▾</span>
+      </div>
+
+      {open && (
+        <div className="value-help-popover">
+          <div className="value-help-header">
+            <span className="value-help-title">{label}</span>
+            <span className="value-help-hint">Search and select a value</span>
+          </div>
+          <input
+            className="value-help-search"
+            type="text"
+            value={query}
+            placeholder={`Search ${label.toLowerCase()} values...`}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+          <div className="value-help-list">
+            {filteredOptions.length === 0 && <div className="value-help-empty">No matching values</div>}
+            {filteredOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`value-help-option ${option.value === value ? 'selected' : ''}`}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                  setQuery('');
+                }}
+              >
+                <span className="value-help-option-label">{option.label}</span>
+                {option.keywords && option.keywords.length > 0 && (
+                  <span className="value-help-option-meta">{option.keywords.join(' • ')}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const TestResults: React.FC = () => {
   const [view, setView] = useState<View>('tests');
@@ -68,13 +222,24 @@ const TestResults: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserResult | null>(null);
   const [detailedResult, setDetailedResult] = useState<DetailedResult | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  
-  // Filter and sort states
+
+  const [testSearch, setTestSearch] = useState('');
+  const [testAttemptsFilter, setTestAttemptsFilter] = useState<TestAttemptsFilter>('all');
+  const [testPassRateBand, setTestPassRateBand] = useState<PassRateBand>('all');
+  const [testDurationBand, setTestDurationBand] = useState<DurationBand>('all');
+  const [testSortBy, setTestSortBy] = useState<'recent' | 'name' | 'attempts' | 'avg-score' | 'pass-rate'>('recent');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'passed' | 'failed'>('all');
-  const [sortBy, setSortBy] = useState<'score-high' | 'score-low' | 'name' | 'date'>('score-high');
+  const [sortBy, setSortBy] = useState<UserSort>('score-high');
   const [minPercent, setMinPercent] = useState<number>(0);
   const [maxPercent, setMaxPercent] = useState<number>(100);
+  const [scoreBandFilter, setScoreBandFilter] = useState<ScoreBand>('all');
+  const [timeSpentBand, setTimeSpentBand] = useState<TimeSpentBand>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [minScore, setMinScore] = useState<number>(0);
+  const [minTimeSpentMinutes, setMinTimeSpentMinutes] = useState<number>(0);
+  const [maxTimeSpentMinutes, setMaxTimeSpentMinutes] = useState<number>(0);
 
   useEffect(() => {
     loadTests();
@@ -82,7 +247,20 @@ const TestResults: React.FC = () => {
 
   useEffect(() => {
     applyFiltersAndSort();
-  }, [userResults, searchQuery, filterStatus, sortBy, minPercent, maxPercent]);
+  }, [
+    userResults,
+    searchQuery,
+    filterStatus,
+    sortBy,
+    minPercent,
+    maxPercent,
+    scoreBandFilter,
+    timeSpentBand,
+    dateFilter,
+    minScore,
+    minTimeSpentMinutes,
+    maxTimeSpentMinutes,
+  ]);
 
   const loadTests = async () => {
     try {
@@ -155,25 +333,69 @@ const TestResults: React.FC = () => {
 
   const applyFiltersAndSort = () => {
     let filtered = [...userResults];
+    const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter((r) =>
-        r.userId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.userName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    if (normalizedSearch) {
+      filtered = filtered.filter((r) => {
+        const haystack = [
+          r.userId,
+          r.userName,
+          r.passed ? 'passed' : 'failed',
+          `${r.scoredMarks}`,
+          `${r.totalMarks}`,
+          `${r.percentage.toFixed(1)}%`,
+          formatScoreBand(r.percentage),
+          formatTimeSpentBand(r.timeSpentSec),
+          formatDate(r.submittedAt),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(normalizedSearch);
+      });
     }
 
-
     filtered = filtered.filter((r) => r.percentage >= minPercent && r.percentage <= maxPercent);
-    // Status filter
+
     if (filterStatus === 'passed') {
       filtered = filtered.filter((r) => r.passed);
     } else if (filterStatus === 'failed') {
       filtered = filtered.filter((r) => !r.passed);
     }
 
-    // Sort
+    if (scoreBandFilter !== 'all') {
+      filtered = filtered.filter((r) => formatScoreBand(r.percentage) === scoreBandFilter);
+    }
+
+    if (timeSpentBand !== 'all') {
+      filtered = filtered.filter((r) => formatTimeSpentBand(r.timeSpentSec) === timeSpentBand);
+    }
+
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter((r) => {
+        const submitted = new Date(r.submittedAt);
+        if (Number.isNaN(submitted.getTime())) return false;
+        const diffMs = now.getTime() - submitted.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (dateFilter === 'today') return diffDays < 1;
+        if (dateFilter === 'last7') return diffDays <= 7;
+        if (dateFilter === 'last30') return diffDays <= 30;
+        return true;
+      });
+    }
+
+    if (minScore > 0) {
+      filtered = filtered.filter((r) => r.scoredMarks >= minScore);
+    }
+
+    if (minTimeSpentMinutes > 0) {
+      filtered = filtered.filter((r) => r.timeSpentSec >= minTimeSpentMinutes * 60);
+    }
+
+    if (maxTimeSpentMinutes > 0) {
+      filtered = filtered.filter((r) => r.timeSpentSec <= maxTimeSpentMinutes * 60);
+    }
+
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'score-high':
@@ -184,6 +406,10 @@ const TestResults: React.FC = () => {
           return a.userName.localeCompare(b.userName);
         case 'date':
           return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+        case 'time-fast':
+          return a.timeSpentSec - b.timeSpentSec;
+        case 'time-slow':
+          return b.timeSpentSec - a.timeSpentSec;
         default:
           return 0;
       }
@@ -191,6 +417,186 @@ const TestResults: React.FC = () => {
 
     setFilteredResults(filtered);
   };
+
+  const filteredTests = useMemo(() => {
+    const normalized = testSearch.trim().toLowerCase();
+    const next = tests.filter((test) => {
+      const matchesSearch =
+        !normalized ||
+        [
+          test.name,
+          `${test.questions} questions`,
+          `${test.duration} minutes`,
+          `${test.totalAttempts} attempts`,
+          `${test.avgScore.toFixed(1)}%`,
+          `${test.passRate.toFixed(1)}%`,
+          formatDurationBand(test.duration),
+          formatPassRateBand(test.passRate),
+          test.totalAttempts > 0 ? 'with attempts' : 'without attempts',
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(normalized);
+
+      const matchesAttempts =
+        testAttemptsFilter === 'all' ||
+        (testAttemptsFilter === 'with-attempts' ? test.totalAttempts > 0 : test.totalAttempts === 0);
+
+      const matchesPassRate =
+        testPassRateBand === 'all' || formatPassRateBand(test.passRate) === testPassRateBand;
+
+      const matchesDuration =
+        testDurationBand === 'all' || formatDurationBand(test.duration) === testDurationBand;
+
+      return matchesSearch && matchesAttempts && matchesPassRate && matchesDuration;
+    });
+
+    next.sort((a, b) => {
+      switch (testSortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'attempts':
+          return b.totalAttempts - a.totalAttempts;
+        case 'avg-score':
+          return b.avgScore - a.avgScore;
+        case 'pass-rate':
+          return b.passRate - a.passRate;
+        case 'recent':
+        default:
+          return b.totalAttempts - a.totalAttempts;
+      }
+    });
+
+    return next;
+  }, [tests, testSearch, testAttemptsFilter, testPassRateBand, testDurationBand, testSortBy]);
+
+  const activeUserFilterCount = [
+    searchQuery,
+    filterStatus !== 'all',
+    scoreBandFilter !== 'all',
+    timeSpentBand !== 'all',
+    dateFilter !== 'all',
+    minPercent > 0,
+    maxPercent < 100,
+    minScore > 0,
+    minTimeSpentMinutes > 0,
+    maxTimeSpentMinutes > 0,
+    sortBy !== 'score-high',
+  ].filter(Boolean).length;
+
+  const activeTestFilterCount = [
+    testSearch,
+    testAttemptsFilter !== 'all',
+    testPassRateBand !== 'all',
+    testDurationBand !== 'all',
+    testSortBy !== 'recent',
+  ].filter(Boolean).length;
+
+  const userSearchOptions = useMemo<ValueHelpOption[]>(() => {
+    const unique = Array.from(
+      new Set(
+        userResults.flatMap((r) => [
+          r.userName,
+          r.userId,
+          r.passed ? 'Passed' : 'Failed',
+          formatScoreBand(r.percentage),
+          formatTimeSpentBand(r.timeSpentSec),
+          `${Math.round(r.percentage)}%`,
+        ])
+      )
+    );
+
+    return unique
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((item) => ({ value: item, label: item }));
+  }, [userResults]);
+
+  const testSearchOptions = useMemo<ValueHelpOption[]>(() => {
+    const unique = Array.from(
+      new Set(
+        tests.flatMap((t) => [
+          t.name,
+          `${t.questions} questions`,
+          `${t.duration} min`,
+          t.totalAttempts > 0 ? 'with attempts' : 'without attempts',
+          formatPassRateBand(t.passRate),
+          formatDurationBand(t.duration),
+        ])
+      )
+    );
+
+    return unique
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((item) => ({ value: item, label: item }));
+  }, [tests]);
+
+  const statusOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Status' },
+    { value: 'passed', label: 'Passed', keywords: ['success', 'qualified'] },
+    { value: 'failed', label: 'Failed', keywords: ['not passed', 'unsuccessful'] },
+  ];
+
+  const scoreBandOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Score Bands' },
+    { value: 'topper', label: 'Topper', keywords: ['85+', 'high score'] },
+    { value: 'strong', label: 'Strong', keywords: ['70+', 'good score'] },
+    { value: 'average', label: 'Average', keywords: ['50+', 'mid score'] },
+    { value: 'at-risk', label: 'At Risk', keywords: ['below 50', 'needs attention'] },
+  ];
+
+  const timeBandOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Time Bands' },
+    { value: 'quick', label: 'Quick Finishers', keywords: ['under 15 min'] },
+    { value: 'balanced', label: 'Balanced Pace', keywords: ['15 to 45 min'] },
+    { value: 'slow', label: 'Slow Finishers', keywords: ['over 45 min'] },
+  ];
+
+  const dateOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Submission Dates' },
+    { value: 'today', label: 'Submitted Today' },
+    { value: 'last7', label: 'Last 7 Days' },
+    { value: 'last30', label: 'Last 30 Days' },
+  ];
+
+  const userSortOptions: ValueHelpOption[] = [
+    { value: 'score-high', label: 'Highest Score' },
+    { value: 'score-low', label: 'Lowest Score' },
+    { value: 'name', label: 'Name (A-Z)' },
+    { value: 'date', label: 'Most Recent' },
+    { value: 'time-fast', label: 'Fastest Completion' },
+    { value: 'time-slow', label: 'Slowest Completion' },
+  ];
+
+  const attemptsOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Attempts' },
+    { value: 'with-attempts', label: 'With Attempts' },
+    { value: 'without-attempts', label: 'Without Attempts' },
+  ];
+
+  const passRateOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Pass Rates' },
+    { value: 'excellent', label: 'Excellent Pass Rate', keywords: ['80% and above'] },
+    { value: 'good', label: 'Good Pass Rate', keywords: ['60% to 79%'] },
+    { value: 'watch', label: 'Needs Attention', keywords: ['40% to 59%'] },
+    { value: 'poor', label: 'Low Pass Rate', keywords: ['below 40%'] },
+  ];
+
+  const durationOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Durations' },
+    { value: 'short', label: 'Short Tests', keywords: ['30 min or less'] },
+    { value: 'medium', label: 'Medium Tests', keywords: ['31 to 60 min'] },
+    { value: 'long', label: 'Long Tests', keywords: ['over 60 min'] },
+  ];
+
+  const testSortOptions: ValueHelpOption[] = [
+    { value: 'recent', label: 'Most Active' },
+    { value: 'name', label: 'Name (A-Z)' },
+    { value: 'attempts', label: 'Most Attempts' },
+    { value: 'avg-score', label: 'Best Average Score' },
+    { value: 'pass-rate', label: 'Best Pass Rate' },
+  ];
 
   const handleTestSelect = async (test: Test) => {
     setSelectedTest(test);
@@ -204,19 +610,39 @@ const TestResults: React.FC = () => {
     setView('details');
   };
 
+  const resetUserFilters = () => {
+    setSearchQuery('');
+    setFilterStatus('all');
+    setSortBy('score-high');
+    setMinPercent(0);
+    setMaxPercent(100);
+    setScoreBandFilter('all');
+    setTimeSpentBand('all');
+    setDateFilter('all');
+    setMinScore(0);
+    setMinTimeSpentMinutes(0);
+    setMaxTimeSpentMinutes(0);
+  };
+
+  const resetTestFilters = () => {
+    setTestSearch('');
+    setTestAttemptsFilter('all');
+    setTestPassRateBand('all');
+    setTestDurationBand('all');
+    setTestSortBy('recent');
+  };
+
   const handleBackToTests = () => {
     setView('tests');
     setSelectedTest(null);
     setUserResults([]);
-    setSearchQuery('');
-    setFilterStatus('all');
-    setSortBy('score-high');
+    resetUserFilters();
   };
 
   const exportToCSV = () => {
     if (!selectedTest || filteredResults.length === 0) return;
 
-    const headers = ['Rank', 'Name', 'User ID', 'Score', 'Total Marks', 'Percentage', 'Status', 'Time Spent', 'Submitted At'];
+    const headers = ['Rank', 'Name', 'User ID', 'Score', 'Total Marks', 'Percentage', 'Status', 'Score Band', 'Time Spent', 'Submitted At'];
     const rows = filteredResults.map((r, idx) => [
       idx + 1,
       r.userName,
@@ -225,6 +651,7 @@ const TestResults: React.FC = () => {
       r.totalMarks,
       r.percentage.toFixed(2) + '%',
       r.passed ? 'Passed' : 'Failed',
+      formatScoreBand(r.percentage),
       formatTime(r.timeSpentSec),
       formatDate(r.submittedAt),
     ]);
@@ -245,7 +672,7 @@ const TestResults: React.FC = () => {
   const exportAllToCSV = () => {
     if (!selectedTest || userResults.length === 0) return;
 
-    const headers = ['Rank', 'Name', 'User ID', 'Score', 'Total Marks', 'Percentage', 'Status', 'Time Spent', 'Submitted At'];
+    const headers = ['Rank', 'Name', 'User ID', 'Score', 'Total Marks', 'Percentage', 'Status', 'Score Band', 'Time Spent', 'Submitted At'];
     const sorted = [...userResults].sort((a, b) => b.percentage - a.percentage);
     const rows = sorted.map((r, idx) => [
       idx + 1,
@@ -255,6 +682,7 @@ const TestResults: React.FC = () => {
       r.totalMarks,
       r.percentage.toFixed(2) + '%',
       r.passed ? 'Passed' : 'Failed',
+      formatScoreBand(r.percentage),
       formatTime(r.timeSpentSec),
       formatDate(r.submittedAt),
     ]);
@@ -286,32 +714,19 @@ const TestResults: React.FC = () => {
     return `${hrs}h ${mins}m ${secs}s`;
   };
 
-  /**
-   * Format date to IST timezone
-   * Converts UTC date string to IST (UTC+5:30) and formats it
-   */
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'N/A';
-    
+
     try {
-      // Ensure the date string is properly parsed as UTC
       let date: Date;
-      
-      // If the date string doesn't end with 'Z', it might not be treated as UTC
       if (dateStr.endsWith('Z')) {
         date = new Date(dateStr);
       } else {
-        // Assume it's UTC and add Z
         date = new Date(dateStr + (dateStr.includes('T') ? 'Z' : 'T00:00:00Z'));
       }
-      
-      // Verify the date is valid
-      if (isNaN(date.getTime())) {
-        console.error('Invalid date:', dateStr);
-        return dateStr;
-      }
-      
-      // Format in IST timezone (Asia/Kolkata = UTC+5:30)
+
+      if (isNaN(date.getTime())) return dateStr;
+
       return date.toLocaleString('en-IN', {
         timeZone: 'Asia/Kolkata',
         month: 'short',
@@ -321,30 +736,56 @@ const TestResults: React.FC = () => {
         minute: '2-digit',
         hour12: true,
       });
-    } catch (e) {
-      console.error('Error formatting date:', e, 'Input:', dateStr);
+    } catch {
       return dateStr;
     }
   };
 
-  // RENDER: Tests View
   if (view === 'tests') {
     return (
       <div className="test-results-container">
         <div className="results-header">
-          <h2>Test Results & Analytics</h2> 
-          <p className="subtitle">View comprehensive analytics and student performance</p>
+          <h2>Test Results & Analytics</h2>
+          <p className="subtitle">Value-help search and searchable filters for test-level analytics</p>
+        </div>
+
+        <div className="filters-bar">
+          <div className="filters-toolbar">
+            <div className="search-stack">
+              <ValueHelpField
+                label="Search Tests"
+                placeholder="Search by test name, duration, attempts, pass rate..."
+                value={testSearch}
+                options={testSearchOptions}
+                onChange={setTestSearch}
+                allowFreeText
+              />
+            </div>
+
+            <div className="filter-group expanded">
+              <ValueHelpField label="Attempts" placeholder="All Attempts" value={testAttemptsFilter} options={attemptsOptions} onChange={(value) => setTestAttemptsFilter(value as TestAttemptsFilter)} compact />
+              <ValueHelpField label="Pass Rate Band" placeholder="All Pass Rates" value={testPassRateBand} options={passRateOptions} onChange={(value) => setTestPassRateBand(value as PassRateBand)} compact />
+              <ValueHelpField label="Duration Band" placeholder="All Durations" value={testDurationBand} options={durationOptions} onChange={(value) => setTestDurationBand(value as DurationBand)} compact />
+              <ValueHelpField label="Sort By" placeholder="Most Active" value={testSortBy} options={testSortOptions} onChange={(value) => setTestSortBy(value as 'recent' | 'name' | 'attempts' | 'avg-score' | 'pass-rate')} compact />
+            </div>
+          </div>
+
+          <div className="filter-summary-row">
+            <span className="results-count">{filteredTests.length} of {tests.length} tests shown</span>
+            <span className="active-filter-count">{activeTestFilterCount} active filters</span>
+            <button className="reset-range-btn" onClick={resetTestFilters}>Reset Filters</button>
+          </div>
         </div>
 
         <div className="tests-grid">
-          {tests.length === 0 && (
+          {filteredTests.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon">📊</div>
-              <p>No test results available yet</p>
+              <p>No test results match the current value-help selection</p>
             </div>
           )}
 
-          {tests.map((test) => (
+          {filteredTests.map((test) => (
             <div key={test.id} className="test-card" onClick={() => handleTestSelect(test)}>
               <div className="test-card-header">
                 <h3>{test.name}</h3>
@@ -373,6 +814,12 @@ const TestResults: React.FC = () => {
                 </div>
               </div>
 
+              <div className="tag-row">
+                <span className="data-tag">{formatDurationBand(test.duration)}</span>
+                <span className="data-tag">{formatPassRateBand(test.passRate)}</span>
+                <span className="data-tag">{test.totalAttempts > 0 ? 'live data' : 'no attempts'}</span>
+              </div>
+
               <div className="test-card-footer">
                 <span className="view-link">View Results →</span>
               </div>
@@ -383,7 +830,6 @@ const TestResults: React.FC = () => {
     );
   }
 
-  // RENDER: Users View
   if (view === 'users') {
     return (
       <div className="test-results-container">
@@ -393,35 +839,29 @@ const TestResults: React.FC = () => {
           </button>
           <div>
             <h2>{selectedTest?.name}</h2>
-            <p className="subtitle">{userResults.length} student attempts</p>
+            <p className="subtitle">{filteredResults.length} of {userResults.length} student attempts shown</p>
           </div>
         </div>
 
         <div className="filters-bar">
-          <div className="filters-row">
-            <div className="search-box">
-              <span className="search-icon">🔍</span>
-              <input
-                type="text"
-                placeholder="Search by name or user ID..."
+          <div className="filters-toolbar">
+            <div className="search-stack">
+              <ValueHelpField
+                label="Search Results"
+                placeholder="Search by user, status, score band, percentage, date..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                options={userSearchOptions}
+                onChange={setSearchQuery}
+                allowFreeText
               />
             </div>
 
-            <div className="filter-group">
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)}>
-                <option value="all">All Status</option>
-                <option value="passed">Passed</option>
-                <option value="failed">Failed</option>
-              </select>
-
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
-                <option value="score-high">Highest Score</option>
-                <option value="score-low">Lowest Score</option>
-                <option value="name">Name (A-Z)</option>
-                <option value="date">Most Recent</option>
-              </select>
+            <div className="filter-group expanded">
+              <ValueHelpField label="Status" placeholder="All Status" value={filterStatus} options={statusOptions} onChange={(value) => setFilterStatus(value as 'all' | 'passed' | 'failed')} compact />
+              <ValueHelpField label="Score Band" placeholder="All Score Bands" value={scoreBandFilter} options={scoreBandOptions} onChange={(value) => setScoreBandFilter(value as ScoreBand)} compact />
+              <ValueHelpField label="Time Band" placeholder="All Time Bands" value={timeSpentBand} options={timeBandOptions} onChange={(value) => setTimeSpentBand(value as TimeSpentBand)} compact />
+              <ValueHelpField label="Submission Date" placeholder="All Submission Dates" value={dateFilter} options={dateOptions} onChange={(value) => setDateFilter(value as DateFilter)} compact />
+              <ValueHelpField label="Sort By" placeholder="Highest Score" value={sortBy} options={userSortOptions} onChange={(value) => setSortBy(value as UserSort)} compact />
             </div>
 
             <div className="export-group">
@@ -434,55 +874,48 @@ const TestResults: React.FC = () => {
             </div>
           </div>
 
-          <div className="percent-filter-row">
-            <span className="percent-filter-label">Score Range:</span>
-            <div className="percent-inputs">
-              <div className="percent-input-group">
-                <label>Min %</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={maxPercent}
-                  value={minPercent}
-                  onChange={(e) => setMinPercent(Math.max(0, Math.min(Number(e.target.value), maxPercent)))}
-                />
-              </div>
-              <div className="percent-range-track">
-                <div
-                  className="percent-range-fill"
-                  style={{ left: `${minPercent}%`, width: `${maxPercent - minPercent}%` }}
-                />
-                <input
-                  type="range"
-                  min={0} max={100}
-                  value={minPercent}
-                  onChange={(e) => setMinPercent(Math.min(Number(e.target.value), maxPercent - 1))}
-                  className="range-thumb range-thumb-left"
-                />
-                <input
-                  type="range"
-                  min={0} max={100}
-                  value={maxPercent}
-                  onChange={(e) => setMaxPercent(Math.max(Number(e.target.value), minPercent + 1))}
-                  className="range-thumb range-thumb-right"
-                />
-              </div>
-              <div className="percent-input-group">
-                <label>Max %</label>
-                <input
-                  type="number"
-                  min={minPercent}
-                  max={100}
-                  value={maxPercent}
-                  onChange={(e) => setMaxPercent(Math.min(100, Math.max(Number(e.target.value), minPercent)))}
-                />
+          <div className="advanced-filters-grid">
+            <div className="filter-card">
+              <span className="filter-card-title">Percentage Range</span>
+              <div className="percent-filter-row">
+                <div className="percent-inputs">
+                  <div className="percent-input-group">
+                    <label>Min %</label>
+                    <input type="number" min={0} max={maxPercent} value={minPercent} onChange={(e) => setMinPercent(Math.max(0, Math.min(Number(e.target.value), maxPercent)))} />
+                  </div>
+                  <div className="percent-range-track">
+                    <div className="percent-range-fill" style={{ left: `${minPercent}%`, width: `${maxPercent - minPercent}%` }} />
+                    <input type="range" min={0} max={100} value={minPercent} onChange={(e) => setMinPercent(Math.min(Number(e.target.value), maxPercent - 1))} className="range-thumb range-thumb-left" />
+                    <input type="range" min={0} max={100} value={maxPercent} onChange={(e) => setMaxPercent(Math.max(Number(e.target.value), minPercent + 1))} className="range-thumb range-thumb-right" />
+                  </div>
+                  <div className="percent-input-group">
+                    <label>Max %</label>
+                    <input type="number" min={minPercent} max={100} value={maxPercent} onChange={(e) => setMaxPercent(Math.min(100, Math.max(Number(e.target.value), minPercent)))} />
+                  </div>
+                </div>
               </div>
             </div>
-            {(minPercent > 0 || maxPercent < 100) && (
-              <button className="reset-range-btn" onClick={() => { setMinPercent(0); setMaxPercent(100); }}>
-                ✕ Reset
-              </button>
-            )}
+
+            <div className="filter-card compact">
+              <span className="filter-card-title">Minimum Marks</span>
+              <input className="filter-input" type="number" min={0} value={minScore} onChange={(e) => setMinScore(Math.max(0, Number(e.target.value)))} placeholder="Minimum marks scored" />
+            </div>
+
+            <div className="filter-card compact">
+              <span className="filter-card-title">Min Time Spent</span>
+              <input className="filter-input" type="number" min={0} value={minTimeSpentMinutes} onChange={(e) => setMinTimeSpentMinutes(Math.max(0, Number(e.target.value)))} placeholder="Minutes" />
+            </div>
+
+            <div className="filter-card compact">
+              <span className="filter-card-title">Max Time Spent</span>
+              <input className="filter-input" type="number" min={0} value={maxTimeSpentMinutes} onChange={(e) => setMaxTimeSpentMinutes(Math.max(0, Number(e.target.value)))} placeholder="Minutes" />
+            </div>
+          </div>
+
+          <div className="filter-summary-row">
+            <span className="results-count">{filteredResults.length} of {userResults.length} results shown</span>
+            <span className="active-filter-count">{activeUserFilterCount} active filters</span>
+            <button className="reset-range-btn" onClick={resetUserFilters}>Reset Filters</button>
           </div>
         </div>
 
@@ -490,35 +923,31 @@ const TestResults: React.FC = () => {
           {filteredResults.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon">🔍</div>
-              <p>No results found</p>
+              <p>No results found for the current value-help selection</p>
             </div>
           )}
 
           {filteredResults.map((user) => (
             <div key={user.id} className="user-result-card" onClick={() => handleUserSelect(user)}>
               <div className="user-info">
-                <div className="user-avatar">
-                  {user.userName.charAt(0).toUpperCase()}
-                </div>
+                <div className="user-avatar">{user.userName.charAt(0).toUpperCase()}</div>
                 <div className="user-details">
                   <h4>{user.userName}</h4>
                   <span className="user-id">{user.userId}</span>
+                  <div className="tag-row small">
+                    <span className="data-tag">{formatScoreBand(user.percentage)}</span>
+                    <span className="data-tag">{formatTimeSpentBand(user.timeSpentSec)}</span>
+                  </div>
                 </div>
               </div>
 
               <div className="user-score">
-                <div className={`score-badge ${user.passed ? 'passed' : 'failed'}`}>
-                  {user.percentage.toFixed(1)}%
-                </div>
-                <span className="score-marks">
-                  {user.scoredMarks} / {user.totalMarks}
-                </span>
+                <div className={`score-badge ${user.passed ? 'passed' : 'failed'}`}>{user.percentage.toFixed(1)}%</div>
+                <span className="score-marks">{user.scoredMarks} / {user.totalMarks}</span>
               </div>
 
               <div className="user-status">
-                <span className={`status-badge ${user.passed ? 'passed' : 'failed'}`}>
-                  {user.passed ? '✓ Passed' : '✗ Failed'}
-                </span>
+                <span className={`status-badge ${user.passed ? 'passed' : 'failed'}`}>{user.passed ? '✓ Passed' : '✗ Failed'}</span>
               </div>
 
               <div className="user-meta">
@@ -526,9 +955,7 @@ const TestResults: React.FC = () => {
                 <span className="meta-item">📅 {formatDate(user.submittedAt)}</span>
               </div>
 
-              <div className="view-details">
-                View Details →
-              </div>
+              <div className="view-details">View Details →</div>
             </div>
           ))}
         </div>
@@ -536,7 +963,6 @@ const TestResults: React.FC = () => {
     );
   }
 
-  // RENDER: Details View
   if (view === 'details' && detailedResult) {
     return (
       <div className="test-results-container">
@@ -555,23 +981,11 @@ const TestResults: React.FC = () => {
             <div className={`score-circle ${detailedResult.passed ? 'passed' : 'failed'}`}>
               <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45" fill="none" stroke="#e0e0e0" strokeWidth="8" />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  fill="none"
-                  stroke={detailedResult.passed ? '#2e7d32' : '#d32f2f'}
-                  strokeWidth="8"
-                  strokeDasharray={`${(detailedResult.percentage * 2.827).toFixed(2)} 283`}
-                  strokeLinecap="round"
-                  transform="rotate(-90 50 50)"
-                />
+                <circle cx="50" cy="50" r="45" fill="none" stroke={detailedResult.passed ? '#2e7d32' : '#d32f2f'} strokeWidth="8" strokeDasharray={`${(detailedResult.percentage * 2.827).toFixed(2)} 283`} strokeLinecap="round" transform="rotate(-90 50 50)" />
               </svg>
               <div className="score-text">
                 <span className="percentage">{detailedResult.percentage.toFixed(1)}%</span>
-                <span className={`status ${detailedResult.passed ? 'passed' : 'failed'}`}>
-                  {detailedResult.passed ? 'Passed' : 'Failed'}
-                </span>
+                <span className={`status ${detailedResult.passed ? 'passed' : 'failed'}`}>{detailedResult.passed ? 'Passed' : 'Failed'}</span>
               </div>
             </div>
           </div>
@@ -579,9 +993,7 @@ const TestResults: React.FC = () => {
           <div className="summary-stats">
             <div className="stat-box">
               <span className="stat-label">Score</span>
-              <span className="stat-value">
-                {detailedResult.scoredMarks} / {detailedResult.totalMarks}
-              </span>
+              <span className="stat-value">{detailedResult.scoredMarks} / {detailedResult.totalMarks}</span>
             </div>
             <div className="stat-box">
               <span className="stat-label">Time Spent</span>
@@ -603,16 +1015,11 @@ const TestResults: React.FC = () => {
                 <div key={section} className="section-card">
                   <div className="section-header">
                     <h4>{section}</h4>
-                    <span className="section-score">
-                      {data.scored} / {data.total}
-                    </span>
+                    <span className="section-score">{data.scored} / {data.total}</span>
                   </div>
                   <div className="section-progress">
                     <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{ width: `${sectionPercentage}%` }}
-                      />
+                      <div className="progress-fill" style={{ width: `${sectionPercentage}%` }} />
                     </div>
                     <span className="section-percentage">{sectionPercentage}%</span>
                   </div>
@@ -632,9 +1039,7 @@ const TestResults: React.FC = () => {
                   <div className="question-header">
                     <span className="question-number">Q{idx + 1}</span>
                     <span className="question-section">{review.section}</span>
-                    <span className={`question-status ${review.isCorrect ? 'correct' : 'incorrect'}`}>
-                      {review.isCorrect ? '✓ Correct' : '✗ Incorrect'}
-                    </span>
+                    <span className={`question-status ${review.isCorrect ? 'correct' : 'incorrect'}`}>{review.isCorrect ? '✓ Correct' : '✗ Incorrect'}</span>
                     <span className="question-marks">{review.marks} marks</span>
                   </div>
 
@@ -643,21 +1048,13 @@ const TestResults: React.FC = () => {
                   <div className="question-answers">
                     <div className="answer-row">
                       <span className="answer-label">Student's Answer:</span>
-                      <span className="answer-value">
-                        {Array.isArray(review.userAnswer)
-                          ? review.userAnswer.join(', ')
-                          : review.userAnswer || 'Not answered'}
-                      </span>
+                      <span className="answer-value">{Array.isArray(review.userAnswer) ? review.userAnswer.join(', ') : review.userAnswer || 'Not answered'}</span>
                     </div>
 
                     {!review.isCorrect && (
                       <div className="answer-row">
                         <span className="answer-label">Correct Answer:</span>
-                        <span className="answer-value correct">
-                          {Array.isArray(review.correctAnswer)
-                            ? review.correctAnswer.join(', ')
-                            : review.correctAnswer ?? 'N/A'}
-                        </span>
+                        <span className="answer-value correct">{Array.isArray(review.correctAnswer) ? review.correctAnswer.join(', ') : review.correctAnswer ?? 'N/A'}</span>
                       </div>
                     )}
                   </div>

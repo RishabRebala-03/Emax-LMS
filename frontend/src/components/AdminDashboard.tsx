@@ -7,8 +7,9 @@ import TestResults from './TestResults';
 import DataMaintenance from './DataMaintenance';
 import CourseManagement from './CourseManagement';
 import './AdminDashboard.css';
-import { apiGet } from '../services/api';
+import { apiGet, apiPost } from '../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
+import AppIcon from './AppIcons';
 
 type AdminView = 'dashboard' | 'users' | 'create-test' | 'edit-test' | 'tests' | 'results' | 'data-maintenance' | 'courses';
 
@@ -56,6 +57,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
     activeTests: 0,
     completedTests: 0,
   });
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "short",
@@ -89,6 +95,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
     setCurrentView('tests');
   };
 
+  const resetPasswordModal = () => {
+    setShowChangePassword(false);
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setChangingPassword(false);
+  };
+
   const renderView = () => {
     switch (currentView) {
       case 'users':
@@ -120,26 +134,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
             </div>
 
             <div className="dashboard-home">
-              <h2>Welcome, {adminName} 👋</h2>
+              <h2>Welcome, {adminName}</h2>
               <p className="subtitle">Manage tests, users, and monitor system performance</p>
 
               <div className="stats-grid">
                 <div className="stat-card">
-                  <div className="stat-icon">👥</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="users" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Total Users</h3>
                     <p className="stat-number">{stats.totalUsers}</p>
                   </div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-icon">📝</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="tests" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Active Tests</h3>
                     <p className="stat-number">{stats.activeTests}</p>
                   </div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-icon">✅</div>
+                  <div className="stat-icon" aria-hidden="true">
+                    <AppIcon name="completed" className="stat-icon-svg" />
+                  </div>
                   <div className="stat-info">
                     <h3>Completed Tests</h3>
                     <p className="stat-number">{stats.completedTests}</p>
@@ -169,42 +189,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
             className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
             onClick={() => setCurrentView('dashboard')}
           >
-            <span className="nav-icon">📊</span>
+            <AppIcon name="dashboard" className="nav-icon" />
             Dashboard
           </button>
           <button
             className={`nav-item ${currentView === 'users' ? 'active' : ''}`}
             onClick={() => setCurrentView('users')}
           >
-            <span className="nav-icon">👥</span>
+            <AppIcon name="users" className="nav-icon" />
             Users
           </button>
           <button
             className={`nav-item ${currentView === 'tests' || currentView === 'create-test' || currentView === 'edit-test' ? 'active' : ''}`}
             onClick={() => setCurrentView('tests')}
           >
-            <span className="nav-icon">📝</span>
+            <AppIcon name="tests" className="nav-icon" />
             Tests
           </button>
           <button
             className={`nav-item ${currentView === 'results' ? 'active' : ''}`}
             onClick={() => setCurrentView('results')}
           >
-            <span className="nav-icon">📈</span>
+            <AppIcon name="results" className="nav-icon" />
             Test Results
           </button>
           <button
             className={`nav-item ${currentView === 'courses' ? 'active' : ''}`}
             onClick={() => setCurrentView('courses')}
           >
-            <span className="nav-icon">📚</span>
+            <AppIcon name="courses" className="nav-icon" />
             Courses
           </button>
           <button
             className={`nav-item ${currentView === 'data-maintenance' ? 'active' : ''}`}
             onClick={() => setCurrentView('data-maintenance')}
           >
-            <span className="nav-icon">🗂️</span>
+            <AppIcon name="maintenance" className="nav-icon" />
             Data Maintenance
           </button>
         </nav>
@@ -213,6 +233,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
             <div className="user-avatar">{adminName.charAt(0).toUpperCase()}</div>
             <span className="user-name">{adminName}</span>
           </div>
+          <button
+            className="change-password-btn"
+            onClick={() => setShowChangePassword(true)}
+          >
+            Change Password
+          </button>
           <button className="logout-btn" onClick={onLogout}>
             Logout
           </button>
@@ -221,6 +247,82 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
       <main className="admin-main">
         {renderView()}
       </main>
+
+      {showChangePassword && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h3>Change Password</h3>
+
+            <div className="form-group">
+              <label>Current Password</label>
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>New Password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button className="secondary-btn" onClick={resetPasswordModal}>
+                Cancel
+              </button>
+
+              <button
+                className="primary-btn"
+                disabled={changingPassword}
+                onClick={async () => {
+                  if (!oldPassword || !newPassword || !confirmPassword) {
+                    alert('All fields are required');
+                    return;
+                  }
+
+                  if (newPassword !== confirmPassword) {
+                    alert('Passwords do not match');
+                    return;
+                  }
+
+                  try {
+                    setChangingPassword(true);
+                    await apiPost('/auth/change-password', {
+                      userId: adminName,
+                      role: 'admin',
+                      oldPassword,
+                      newPassword,
+                    });
+
+                    alert('Password changed successfully');
+                    resetPasswordModal();
+                  } catch (err: any) {
+                    alert(err?.message || 'Failed to change password');
+                  } finally {
+                    setChangingPassword(false);
+                  }
+                }}
+              >
+                {changingPassword ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

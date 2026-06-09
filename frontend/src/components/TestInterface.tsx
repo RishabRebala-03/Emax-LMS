@@ -12,6 +12,7 @@ interface Question {
   type: "mcq" | "msq" | "multiple" | "ordering" | "text";
   question: string;
   options?: string[];
+  correctAnswer?: string | string[];
   section: string;
   marks: number;
 }
@@ -59,13 +60,19 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   questions,
   onExit,
 }) => {
+  const getInitialAnswer = (question: Question): string | string[] => {
+    if (question.type === "ordering") return [];
+    const isMultipleChoice = Array.isArray(question.correctAnswer);
+    return isMultipleChoice ? [] : "";
+  };
+
   const [testStep, setTestStep] = useState<"details" | "instructions" | "exam" | "results">("details");
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
   const [answers, setAnswers] = useState<Answer[]>(
     questions.map((q) => ({
       questionId: q.id,
-      answer: q.type === "multiple" || q.type === "msq" || q.type === "ordering" ? [] : "",
+      answer: getInitialAnswer(q),
       marked: false,
     }))
   );
