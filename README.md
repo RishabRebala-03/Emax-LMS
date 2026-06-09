@@ -8,6 +8,10 @@ Integrated learning, assessment, candidate management, and onboarding platform d
 ![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb)
 ![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker)
 
+![Status](https://img.shields.io/badge/Status-Production_Ready-success)
+![Architecture](https://img.shields.io/badge/Architecture-Full_Stack-blue)
+![Type](https://img.shields.io/badge/Project-LMS_&_Assessment-purple)
+
 ---
 
 ## Overview
