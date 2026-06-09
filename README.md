@@ -135,34 +135,6 @@ Access:
 
 ---
 
-## Technology Stack
-
-### Frontend
-
-* React
-* JavaScript
-* CSS
-
-### Backend
-
-* Python Flask
-
-### Database
-
-* MongoDB
-
-### Document Generation
-
-* PDF Generation
-* Word Template Processing
-
-### Infrastructure
-
-* Docker
-* Containerized Deployment
-
----
-
 ## Platform Statistics
 
 ### User Types
