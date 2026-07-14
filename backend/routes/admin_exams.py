@@ -13,17 +13,42 @@ admin_exams_bp = Blueprint("admin_exams", __name__)
 def list_exams():
     db = get_db()
     exams = list(db.exams.find({}, {"questions": 0}))
+    assignments = list(db.exam_assignments.find({}, {"examId": 1, "userId": 1}))
+    users = list(db.users.find({}, {"userId": 1, "collegeName": 1}))
+
+    user_college_by_id = {
+        str(user.get("userId") or ""): str(user.get("collegeName") or "").strip()
+        for user in users
+        if user.get("userId")
+    }
+    assignment_summary = {}
+    for assignment in assignments:
+        exam_key = str(assignment.get("examId") or "")
+        user_id = str(assignment.get("userId") or "").strip()
+        if not exam_key or not user_id:
+            continue
+        summary = assignment_summary.setdefault(exam_key, {"userIds": set(), "colleges": set()})
+        summary["userIds"].add(user_id)
+        college_name = user_college_by_id.get(user_id, "")
+        if college_name:
+            summary["colleges"].add(college_name)
+
     out = []
     for e in exams:
+        exam_key = str(e["_id"])
+        summary = assignment_summary.get(exam_key, {"userIds": set(), "colleges": set()})
         out.append({
-            "id": str(e["_id"]),
+            "id": exam_key,
             "name": e.get("name"),
             "duration": int(e.get("duration", 0)),
             "questions": int(e.get("questionCount", 0)),
             "sections": e.get("sections", []),
             "passingPercentage": int(e.get("passingPercentage", 40)),
             "createdAt": e.get("createdAt").isoformat() if e.get("createdAt") else None,
+            "updatedAt": e.get("updatedAt").isoformat() if e.get("updatedAt") else None,
             "status": e.get("status", "draft"),
+            "assignmentCount": len(summary["userIds"]),
+            "assignedColleges": sorted(summary["colleges"]),
         })
     out.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
     return jsonify({"tests": to_jsonable(out)})

@@ -16,6 +16,7 @@ interface UserResult {
   id: string;
   userId: string;
   userName: string;
+  collegeName?: string;
   percentage: number;
   scoredMarks: number;
   totalMarks: number;
@@ -228,9 +229,11 @@ const TestResults: React.FC = () => {
   const [testPassRateBand, setTestPassRateBand] = useState<PassRateBand>('all');
   const [testDurationBand, setTestDurationBand] = useState<DurationBand>('all');
   const [testSortBy, setTestSortBy] = useState<'recent' | 'name' | 'attempts' | 'avg-score' | 'pass-rate'>('recent');
+  const [showTestFilters, setShowTestFilters] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'passed' | 'failed'>('all');
+  const [collegeFilter, setCollegeFilter] = useState('all');
   const [sortBy, setSortBy] = useState<UserSort>('score-high');
   const [minPercent, setMinPercent] = useState<number>(0);
   const [maxPercent, setMaxPercent] = useState<number>(100);
@@ -240,6 +243,7 @@ const TestResults: React.FC = () => {
   const [minScore, setMinScore] = useState<number>(0);
   const [minTimeSpentMinutes, setMinTimeSpentMinutes] = useState<number>(0);
   const [maxTimeSpentMinutes, setMaxTimeSpentMinutes] = useState<number>(0);
+  const [showUserFilters, setShowUserFilters] = useState(false);
 
   useEffect(() => {
     loadTests();
@@ -251,6 +255,7 @@ const TestResults: React.FC = () => {
     userResults,
     searchQuery,
     filterStatus,
+    collegeFilter,
     sortBy,
     minPercent,
     maxPercent,
@@ -287,6 +292,7 @@ const TestResults: React.FC = () => {
         id: r.id,
         userId: r.userId,
         userName: r.userName || r.userId,
+        collegeName: r.collegeName || '',
         percentage: r.percentage,
         scoredMarks: r.scoredMarks,
         totalMarks: r.totalMarks,
@@ -340,6 +346,7 @@ const TestResults: React.FC = () => {
         const haystack = [
           r.userId,
           r.userName,
+          r.collegeName,
           r.passed ? 'passed' : 'failed',
           `${r.scoredMarks}`,
           `${r.totalMarks}`,
@@ -360,6 +367,10 @@ const TestResults: React.FC = () => {
       filtered = filtered.filter((r) => r.passed);
     } else if (filterStatus === 'failed') {
       filtered = filtered.filter((r) => !r.passed);
+    }
+
+    if (collegeFilter !== 'all') {
+      filtered = filtered.filter((r) => (r.collegeName || '') === collegeFilter);
     }
 
     if (scoreBandFilter !== 'all') {
@@ -473,6 +484,7 @@ const TestResults: React.FC = () => {
   const activeUserFilterCount = [
     searchQuery,
     filterStatus !== 'all',
+    collegeFilter !== 'all',
     scoreBandFilter !== 'all',
     timeSpentBand !== 'all',
     dateFilter !== 'all',
@@ -498,6 +510,7 @@ const TestResults: React.FC = () => {
         userResults.flatMap((r) => [
           r.userName,
           r.userId,
+          r.collegeName,
           r.passed ? 'Passed' : 'Failed',
           formatScoreBand(r.percentage),
           formatTimeSpentBand(r.timeSpentSec),
@@ -511,6 +524,13 @@ const TestResults: React.FC = () => {
       .slice(0, 24)
       .map((item) => ({ value: item, label: item }));
   }, [userResults]);
+
+  const collegeOptions: ValueHelpOption[] = [
+    { value: 'all', label: 'All Colleges' },
+    ...Array.from(new Set(userResults.map((r) => r.collegeName).filter(Boolean) as string[]))
+      .sort()
+      .map((college) => ({ value: college, label: college })),
+  ];
 
   const testSearchOptions = useMemo<ValueHelpOption[]>(() => {
     const unique = Array.from(
@@ -613,6 +633,7 @@ const TestResults: React.FC = () => {
   const resetUserFilters = () => {
     setSearchQuery('');
     setFilterStatus('all');
+    setCollegeFilter('all');
     setSortBy('score-high');
     setMinPercent(0);
     setMaxPercent(100);
@@ -745,11 +766,28 @@ const TestResults: React.FC = () => {
     return (
       <div className="test-results-container">
         <div className="results-header">
-          <h2>Test Results & Analytics</h2>
-          <p className="subtitle">Value-help search and searchable filters for test-level analytics</p>
+          <div className="results-header-top">
+            <div className="results-header-title-block">
+              <h2>Test Results</h2>
+              <p className="subtitle">Value-help search and searchable filters for test-level analytics</p>
+            </div>
+            <button className={`results-filter-toggle ${showTestFilters ? 'active' : ''}`} onClick={() => setShowTestFilters((prev) => !prev)}>
+              <span className="results-filter-toggle-icon" aria-hidden="true">{showTestFilters ? '-' : '+'}</span>
+              <span className="results-filter-toggle-label">{showTestFilters ? 'Hide Filters' : 'Show Filters'}</span>
+              {activeTestFilterCount > 0 && <span className="results-filter-toggle-count">{activeTestFilterCount}</span>}
+            </button>
+          </div>
         </div>
 
-        <div className="filters-bar">
+        <div className="filters-header-row legacy-hidden">
+          <button className={`results-filter-toggle ${showTestFilters ? 'active' : ''}`} onClick={() => setShowTestFilters((prev) => !prev)}>
+            <span className="results-filter-toggle-icon" aria-hidden="true">{showTestFilters ? '−' : '+'}</span>
+            <span className="results-filter-toggle-label">{showTestFilters ? 'Hide Filters' : 'Show Filters'}</span>
+            {activeTestFilterCount > 0 && <span className="results-filter-toggle-count">{activeTestFilterCount}</span>}
+          </button>
+        </div>
+
+        {showTestFilters && <div className="filters-bar">
           <div className="filters-toolbar">
             <div className="search-stack">
               <ValueHelpField
@@ -775,7 +813,7 @@ const TestResults: React.FC = () => {
             <span className="active-filter-count">{activeTestFilterCount} active filters</span>
             <button className="reset-range-btn" onClick={resetTestFilters}>Reset Filters</button>
           </div>
-        </div>
+        </div>}
 
         <div className="tests-grid">
           {filteredTests.length === 0 && (
@@ -840,10 +878,23 @@ const TestResults: React.FC = () => {
           <div>
             <h2>{selectedTest?.name}</h2>
             <p className="subtitle">{filteredResults.length} of {userResults.length} student attempts shown</p>
+            <button className={`results-filter-toggle results-filter-toggle-inline ${showUserFilters ? 'active' : ''}`} onClick={() => setShowUserFilters((prev) => !prev)}>
+              <span className="results-filter-toggle-icon" aria-hidden="true">{showUserFilters ? '-' : '+'}</span>
+              <span className="results-filter-toggle-label">{showUserFilters ? 'Hide Filters' : 'Show Filters'}</span>
+              {activeUserFilterCount > 0 && <span className="results-filter-toggle-count">{activeUserFilterCount}</span>}
+            </button>
           </div>
         </div>
 
-        <div className="filters-bar">
+        <div className="filters-header-row">
+          <button className={`results-filter-toggle ${showUserFilters ? 'active' : ''}`} onClick={() => setShowUserFilters((prev) => !prev)}>
+            <span className="results-filter-toggle-icon" aria-hidden="true">{showUserFilters ? '−' : '+'}</span>
+            <span className="results-filter-toggle-label">{showUserFilters ? 'Hide Filters' : 'Show Filters'}</span>
+            {activeUserFilterCount > 0 && <span className="results-filter-toggle-count">{activeUserFilterCount}</span>}
+          </button>
+        </div>
+
+        {showUserFilters && <div className="filters-bar">
           <div className="filters-toolbar">
             <div className="search-stack">
               <ValueHelpField
@@ -858,6 +909,7 @@ const TestResults: React.FC = () => {
 
             <div className="filter-group expanded">
               <ValueHelpField label="Status" placeholder="All Status" value={filterStatus} options={statusOptions} onChange={(value) => setFilterStatus(value as 'all' | 'passed' | 'failed')} compact />
+              <ValueHelpField label="College" placeholder="All Colleges" value={collegeFilter} options={collegeOptions} onChange={setCollegeFilter} compact />
               <ValueHelpField label="Score Band" placeholder="All Score Bands" value={scoreBandFilter} options={scoreBandOptions} onChange={(value) => setScoreBandFilter(value as ScoreBand)} compact />
               <ValueHelpField label="Time Band" placeholder="All Time Bands" value={timeSpentBand} options={timeBandOptions} onChange={(value) => setTimeSpentBand(value as TimeSpentBand)} compact />
               <ValueHelpField label="Submission Date" placeholder="All Submission Dates" value={dateFilter} options={dateOptions} onChange={(value) => setDateFilter(value as DateFilter)} compact />
@@ -917,7 +969,7 @@ const TestResults: React.FC = () => {
             <span className="active-filter-count">{activeUserFilterCount} active filters</span>
             <button className="reset-range-btn" onClick={resetUserFilters}>Reset Filters</button>
           </div>
-        </div>
+        </div>}
 
         <div className="users-list">
           {filteredResults.length === 0 && (
@@ -934,6 +986,7 @@ const TestResults: React.FC = () => {
                 <div className="user-details">
                   <h4>{user.userName}</h4>
                   <span className="user-id">{user.userId}</span>
+                  {user.collegeName && <span className="user-id">{user.collegeName}</span>}
                   <div className="tag-row small">
                     <span className="data-tag">{formatScoreBand(user.percentage)}</span>
                     <span className="data-tag">{formatTimeSpentBand(user.timeSpentSec)}</span>

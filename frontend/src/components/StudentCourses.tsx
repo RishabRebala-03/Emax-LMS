@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiGet } from "../services/api";
 import "./StudentCourses.css";
+import { normalizeLessonContent, renderRichText, type CourseMaterialRecord, type LessonBlock, type LessonContent } from "./courseContent";
 
 interface AssignedCourse {
   id: string;
@@ -10,12 +11,7 @@ interface AssignedCourse {
   daysCovered: number;
 }
 
-interface CourseMaterial {
-  id: string;
-  dayNumber: number;
-  title: string;
-  content: string;
-}
+interface CourseMaterial extends CourseMaterialRecord {}
 
 type TabKey = "assigned" | "materials";
 
@@ -23,17 +19,171 @@ interface Props {
   userId: string;
 }
 
+export function LessonBlockView({ block }: { block: LessonBlock }) {
+  switch (block.type) {
+    case "paragraph":
+      return <p>{renderRichText(block.text)}</p>;
+    case "bullet_list":
+      return (
+        <div className="student-lesson-block">
+          {block.title && <h5>{block.title}</h5>}
+          <ul className="student-lesson-list">
+            {block.items.map((item) => (
+              <li key={item}>{renderRichText(item)}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "stat_grid":
+      return (
+        <div className="student-lesson-block">
+          {block.title && <h5>{block.title}</h5>}
+          <div className="student-stat-grid">
+            {block.items.map((item) => (
+              <article key={`${item.label}-${item.value}`} className="student-stat-card">
+                <span className="student-stat-label">{item.label}</span>
+                <strong>{item.value}</strong>
+                {item.detail && <p>{item.detail}</p>}
+              </article>
+            ))}
+          </div>
+        </div>
+      );
+    case "comparison_table":
+      return (
+        <div className="student-lesson-block">
+          {block.title && <h5>{block.title}</h5>}
+          <div className="student-table-wrap">
+            <table className="student-lesson-table">
+              <thead>
+                <tr>
+                  {block.columns.map((column) => (
+                    <th key={column}>{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {block.rows.map((row, rowIndex) => (
+                  <tr key={`${row[0]}-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={`${cell}-${cellIndex}`}>{renderRichText(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    case "image":
+      return (
+        <figure className="student-lesson-figure">
+          <img src={block.src} alt={block.alt} />
+          {block.caption && <figcaption>{block.caption}</figcaption>}
+        </figure>
+      );
+    case "image_grid":
+      return (
+        <div className="student-image-grid">
+          {block.images.map((image) => (
+            <figure key={`${image.src}-${image.caption || image.alt}`} className="student-lesson-figure grid">
+              <img src={image.src} alt={image.alt} />
+              {image.caption && <figcaption>{image.caption}</figcaption>}
+            </figure>
+          ))}
+        </div>
+      );
+    case "callout":
+      return (
+        <aside className={`student-callout ${block.tone || "info"}`}>
+          <strong>{block.title}</strong>
+          <p>{renderRichText(block.text)}</p>
+        </aside>
+      );
+    case "card_grid":
+      return (
+        <div className="student-lesson-block">
+          {block.title && <h5>{block.title}</h5>}
+          <div className="student-pillar-grid">
+            {block.items.map((item) => (
+              <article key={item.title} className="student-pillar-card">
+                <h6>{item.title}</h6>
+                <p>{renderRichText(item.text)}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+export function LessonView({ lesson, material }: { lesson: LessonContent; material: CourseMaterial }) {
+  return (
+    <article className="student-material-card lesson">
+      <div className="student-lesson-shell">
+        <section className="student-lesson-hero">
+          <div>
+            <h4>{lesson.hero.title}</h4>
+            <p>{lesson.hero.subtitle}</p>
+          </div>
+          <div className="student-lesson-hero-meta">
+            <span className="student-course-pill">Day {material.dayNumber}</span>
+          </div>
+        </section>
+
+        <nav className="student-lesson-nav">
+          {lesson.toc.map((item) => (
+            <a key={item.id} href={`#${item.id}`}>{item.label}</a>
+          ))}
+        </nav>
+
+        <section className="student-lesson-sections">
+          {lesson.sections.map((section) => (
+            <article key={section.id} id={section.id} className="student-lesson-section">
+              <h5>{section.title}</h5>
+              {section.intro && <p className="student-section-intro">{renderRichText(section.intro)}</p>}
+              <div className="student-section-blocks">
+                {section.blocks.map((block, index) => (
+                  <LessonBlockView key={`${section.id}-${block.type}-${index}`} block={block} />
+                ))}
+              </div>
+            </article>
+          ))}
+        </section>
+      </div>
+    </article>
+  );
+}
+
 const StudentCourses: React.FC<Props> = ({ userId }) => {
   const [activeTab, setActiveTab] = useState<TabKey>("assigned");
   const [courses, setCourses] = useState<AssignedCourse[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [materials, setMaterials] = useState<CourseMaterial[]>([]);
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId) ?? null,
     [courses, selectedCourseId]
+  );
+
+  const sortedMaterials = useMemo(
+    () => materials.slice().sort((a, b) => a.dayNumber - b.dayNumber || a.title.localeCompare(b.title)),
+    [materials]
+  );
+
+  const selectedMaterial = useMemo(
+    () => sortedMaterials.find((material) => material.id === selectedMaterialId) ?? sortedMaterials[0] ?? null,
+    [sortedMaterials, selectedMaterialId]
+  );
+
+  const selectedLesson = useMemo(
+    () => (selectedMaterial ? normalizeLessonContent(selectedMaterial) : null),
+    [selectedMaterial]
   );
 
   const loadCourses = async () => {
@@ -60,6 +210,7 @@ const StudentCourses: React.FC<Props> = ({ userId }) => {
   const loadMaterials = async (courseId: string) => {
     if (!courseId) {
       setMaterials([]);
+      setSelectedMaterialId("");
       return;
     }
     setLoadingMaterials(true);
@@ -67,10 +218,19 @@ const StudentCourses: React.FC<Props> = ({ userId }) => {
       const res = await apiGet<{ materials: CourseMaterial[] }>(
         `/answerer/courses/${courseId}/materials?userId=${encodeURIComponent(userId)}`
       );
-      setMaterials(res.materials || []);
+      const fetchedMaterials = res.materials || [];
+      setMaterials(fetchedMaterials);
+      setSelectedMaterialId((current) =>
+        current && fetchedMaterials.some((material) => material.id === current)
+          ? current
+          : fetchedMaterials
+              .slice()
+              .sort((a, b) => a.dayNumber - b.dayNumber || a.title.localeCompare(b.title))[0]?.id || ""
+      );
     } catch (error) {
       console.error(error);
       setMaterials([]);
+      setSelectedMaterialId("");
     } finally {
       setLoadingMaterials(false);
     }
@@ -85,6 +245,7 @@ const StudentCourses: React.FC<Props> = ({ userId }) => {
       loadMaterials(selectedCourseId);
     } else {
       setMaterials([]);
+      setSelectedMaterialId("");
     }
   }, [selectedCourseId, userId]);
 
@@ -124,7 +285,7 @@ const StudentCourses: React.FC<Props> = ({ userId }) => {
                 <article key={course.id} className="student-course-card">
                   <div className="student-course-card-top">
                     <h3>{course.name}</h3>
-                    <span className="student-course-pill">{course.daysCovered} days</span>
+                    <span className="student-course-pill">{course.daysCovered} day{course.daysCovered !== 1 ? "s" : ""}</span>
                   </div>
                   <p>{course.description || "No description added for this course yet."}</p>
                   <div className="student-course-stats">
@@ -176,18 +337,38 @@ const StudentCourses: React.FC<Props> = ({ userId }) => {
 
               {loadingMaterials ? (
                 <div className="empty-state"><p>Loading course material...</p></div>
-              ) : materials.length === 0 ? (
+              ) : sortedMaterials.length === 0 ? (
                 <div className="empty-state"><p>No material has been added for this course yet.</p></div>
               ) : (
-                materials.map((material) => (
-                  <article key={material.id} className="student-material-card">
-                    <div className="student-material-day">Day {material.dayNumber}</div>
-                    <div className="student-material-content">
-                      <h4>{material.title}</h4>
-                      <p>{material.content || "Course material shared for this day is available below."}</p>
-                    </div>
-                  </article>
-                ))
+                <>
+                  <div className="student-material-switcher">
+                    {sortedMaterials.map((material) => (
+                      <button
+                        key={material.id}
+                        type="button"
+                        className={`student-material-chip ${selectedMaterial?.id === material.id ? "active" : ""}`}
+                        onClick={() => setSelectedMaterialId(material.id)}
+                      >
+                        Day {material.dayNumber}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedMaterial && (
+                    selectedLesson ? (
+                      <LessonView lesson={selectedLesson} material={selectedMaterial} />
+                    ) : (
+                      <article className="student-material-card">
+                        <div className="student-material-day">Day {selectedMaterial.dayNumber}</div>
+                        <div className="student-material-content">
+                          <h4>{selectedMaterial.title}</h4>
+                          {selectedMaterial.summary && <p className="student-material-summary">{selectedMaterial.summary}</p>}
+                          <p>{selectedMaterial.content || "Course material shared for this day is available below."}</p>
+                        </div>
+                      </article>
+                    )
+                  )}
+                </>
               )}
             </div>
           )}

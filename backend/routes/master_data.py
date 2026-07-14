@@ -66,6 +66,46 @@ def add_master_item(category: str):
 
 
 # ─────────────────────────────────────────────
+# ADMIN — update item in a category
+# ─────────────────────────────────────────────
+@master_data_bp.patch("/<category>/<item_id>")
+@master_data_bp.patch("/<category>/<item_id>/")
+def update_master_item(category: str, item_id: str):
+    if category not in VALID_CATEGORIES:
+        return jsonify({"error": "Invalid category"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    label = str(payload.get("label", "")).strip()
+    if not label:
+        return jsonify({"error": "label is required"}), 400
+
+    db = get_db()
+    try:
+        q = {"_id": ObjectId(item_id), "category": category}
+    except Exception:
+        return jsonify({"error": "Invalid id"}), 400
+
+    # Check if new label already exists (case-insensitive, but not the same item)
+    existing = db.master_data.find_one({
+        "category": category,
+        "label": {"$regex": f"^{label}$", "$options": "i"},
+        "_id": {"$ne": ObjectId(item_id)}
+    })
+    if existing:
+        return jsonify({"error": f"'{label}' already exists in {category}"}), 409
+
+    result = db.master_data.update_one(q, {"$set": {"label": label}})
+    if result.matched_count == 0:
+        return jsonify({"error": "Item not found"}), 404
+    
+    return jsonify(to_jsonable({
+        "id": str(item_id),
+        "label": label,
+        "createdAt": None
+    })), 200
+
+
+# ─────────────────────────────────────────────
 # ADMIN — delete item from a category
 # ─────────────────────────────────────────────
 @master_data_bp.delete("/<category>/<item_id>")

@@ -4,6 +4,7 @@ from bson import ObjectId
 
 from config.db import get_db
 from utils.json import to_jsonable
+from routes.admin_courses import _ensure_default_course_materials
 from utils.validators import require_fields
 from services.scoring import compute_result
 
@@ -155,6 +156,9 @@ def list_assigned_courses():
     course_ids = [a.get("courseId") for a in assignments if a.get("courseId")]
     courses = list(db.courses.find({"_id": {"$in": course_ids}})) if course_ids else []
 
+    for course_id in course_ids:
+        _ensure_default_course_materials(db, course_id)
+
     materials_by_course = {}
     if course_ids:
         materials = list(db.course_materials.find({"courseId": {"$in": course_ids}}))
@@ -199,6 +203,7 @@ def get_course_materials(course_id: str):
     if not course:
         return jsonify({"error": "Course not found"}), 404
 
+    _ensure_default_course_materials(db, oid)
     materials = list(db.course_materials.find({"courseId": oid}).sort([("dayNumber", 1), ("createdAt", 1)]))
     out = []
     for material in materials:
@@ -207,6 +212,10 @@ def get_course_materials(course_id: str):
             "dayNumber": int(material.get("dayNumber", 1)),
             "title": material.get("title", ""),
             "content": material.get("content", ""),
+            "contentType": material.get("contentType", "plain_text"),
+            "contentJson": material.get("contentJson"),
+            "estimatedMinutes": int(material.get("estimatedMinutes", 0) or 0),
+            "summary": material.get("summary", ""),
             "createdAt": material.get("createdAt"),
         })
 

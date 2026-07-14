@@ -1,9 +1,79 @@
 from flask import Blueprint, jsonify
 from bson import ObjectId
+from typing import Optional
 from config.db import get_db
 from utils.json import to_jsonable
 
 admin_results_bp = Blueprint("admin_results", __name__)
+
+
+def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict:
+    if not registration:
+        return user
+
+    merged = dict(user)
+    field_map = {
+        "naxUnid": "naxUnid",
+        "studentName": "name",
+        "studentId": "studentId",
+        "email": "email",
+        "collegeEmail": "collegeEmail",
+        "mobile": "mobile",
+        "gender": "gender",
+        "courseStream": "courseStream",
+        "cgpa": "cgpa",
+        "sapCertification": "sapCertification",
+        "collegeName": "collegeName",
+    }
+
+    for reg_key, user_key in field_map.items():
+        if merged.get(user_key) in (None, ""):
+            merged[user_key] = registration.get(reg_key)
+
+    if merged.get("collegeRollNumber") in (None, "") and registration.get("studentId"):
+        merged["collegeRollNumber"] = registration.get("studentId")
+
+    return merged
+
+
+def _find_user_with_profile(db, user_identifier: str) -> Optional[dict]:
+    if not user_identifier:
+        return None
+
+    normalized = str(user_identifier).strip()
+    normalized_email = normalized.lower()
+
+    user = db.users.find_one({
+        "$or": [
+            {"userId": normalized},
+            {"naxUnid": normalized},
+            {"studentId": normalized},
+            {"email": normalized_email},
+        ]
+    })
+
+    registration = db.student_registrations.find_one({
+        "$or": [
+            {"naxUnid": normalized},
+            {"studentId": normalized},
+            {"email": normalized_email},
+        ]
+    })
+
+    if user:
+        return _merge_registration_fields(user, registration)
+
+    if registration:
+        synthetic_user = {
+            "userId": normalized,
+            "naxUnid": registration.get("naxUnid"),
+            "studentId": registration.get("studentId"),
+            "email": registration.get("email"),
+            "name": registration.get("studentName"),
+        }
+        return _merge_registration_fields(synthetic_user, registration)
+
+    return None
 
 
 @admin_results_bp.route("/tests", methods=["GET"])
@@ -80,8 +150,7 @@ def get_test_user_results(exam_id: str):
     
     user_results = []
     for result in results:
-        # Get user name
-        user = db.users.find_one({"userId": result.get("userId")})
+        user = _find_user_with_profile(db, result.get("userId"))
         user_name = user.get("name", result.get("userId")) if user else result.get("userId")
         
         # Format submittedAt with explicit UTC 'Z' suffix
@@ -94,6 +163,7 @@ def get_test_user_results(exam_id: str):
             "id": str(result["_id"]),
             "userId": result.get("userId"),
             "userName": user_name,
+            "collegeName": user.get("collegeName", "") if user else "",
             "percentage": float(result.get("percentage", 0)),
             "scoredMarks": int(result.get("scoredMarks", 0)),
             "totalMarks": int(result.get("totalMarks", 0)),
@@ -120,8 +190,7 @@ def get_detailed_result(result_id: str):
     if not result:
         return jsonify({"error": "Result not found"}), 404
     
-    # Get user name
-    user = db.users.find_one({"userId": result.get("userId")})
+    user = _find_user_with_profile(db, result.get("userId"))
     user_name = user.get("name", result.get("userId")) if user else result.get("userId")
     
     # Calculate percentile

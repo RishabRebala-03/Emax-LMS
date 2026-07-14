@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPut } from "../services/api";
 import "./CourseManagement.css";
+import "./StudentCourses.css";
+import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
+import { LessonView } from "./StudentCourses";
+import { normalizeLessonContent, type CourseMaterialRecord } from "./courseContent";
 
 interface Course {
   id: string;
@@ -21,52 +25,28 @@ interface Student {
   gender?: string;
 }
 
-interface Material {
-  id: string;
-  courseId: string;
-  dayNumber: number;
-  title: string;
-  content: string;
-}
+interface CourseMaterial extends CourseMaterialRecord {}
 
 const emptyCourseForm = { name: "", description: "" };
-const emptyMaterialForm = { dayNumber: 1, title: "", content: "" };
-
-async function submitMaterial(url: string, method: "POST" | "PUT", body: unknown) {
-  const res = await fetch(`${process.env.REACT_APP_API_BASE_URL || ""}${url}`, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let message = "Failed to save material";
-    try {
-      const payload = await res.json();
-      message = payload.error || payload.message || message;
-    } catch {
-      const text = await res.text().catch(() => "");
-      message = text || message;
-    }
-    throw new Error(message);
-  }
-}
 
 const CourseManagement: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
-  const [materials, setMaterials] = useState<Material[]>([]);
   const [courseForm, setCourseForm] = useState(emptyCourseForm);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
-  const [materialForm, setMaterialForm] = useState(emptyMaterialForm);
-  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
+  const [materials, setMaterials] = useState<CourseMaterial[]>([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [savingAssignments, setSavingAssignments] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
   const [streamFilter, setStreamFilter] = useState("");
   const [collegeFilter, setCollegeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+  const [showAssignFilters, setShowAssignFilters] = useState(false);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedCourseId) ?? null,
@@ -82,6 +62,21 @@ const CourseManagement: React.FC = () => {
     () => Array.from(new Set(students.map((student) => student.collegeName).filter(Boolean) as string[])).sort(),
     [students]
   );
+
+  const studentSearchOptions = useMemo<ValueHelpOption[]>(() => {
+    const unique = Array.from(new Set(students.flatMap((student) => [
+      student.name, student.userId, student.email, student.courseStream, student.collegeName, student.gender,
+    ]).filter(Boolean) as string[]));
+    return unique.slice(0, 40).map((value) => ({ value, label: value }));
+  }, [students]);
+
+  const streamOptions: ValueHelpOption[] = [{ value: "", label: "All Streams" }, ...availableStreams.map((value) => ({ value, label: value }))];
+  const collegeOptions: ValueHelpOption[] = [{ value: "", label: "All Colleges" }, ...availableColleges.map((value) => ({ value, label: value }))];
+  const statusOptions: ValueHelpOption[] = [
+    { value: "active", label: "Active Only" },
+    { value: "inactive", label: "Inactive Only" },
+    { value: "all", label: "All Students" },
+  ];
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -105,10 +100,38 @@ const CourseManagement: React.FC = () => {
   );
 
   const areAllFilteredStudentsSelected = useMemo(
-    () =>
-      filteredStudentIds.length > 0 &&
-      filteredStudentIds.every((userId) => selectedUserIds.includes(userId)),
+    () => filteredStudentIds.length > 0 && filteredStudentIds.every((userId) => selectedUserIds.includes(userId)),
     [filteredStudentIds, selectedUserIds]
+  );
+
+  const activeAssignFilterCount = [
+    Boolean(studentSearch.trim()),
+    Boolean(streamFilter),
+    Boolean(collegeFilter),
+    statusFilter !== "active",
+  ].filter(Boolean).length;
+
+  const assignmentChanges = useMemo(() => {
+    const selected = new Set(selectedUserIds);
+    const assigned = new Set(assignedUserIds);
+    const added = selectedUserIds.filter((userId) => !assigned.has(userId));
+    const removed = assignedUserIds.filter((userId) => !selected.has(userId));
+    return { added, removed };
+  }, [assignedUserIds, selectedUserIds]);
+
+  const sortedMaterials = useMemo(
+    () => materials.slice().sort((a, b) => a.dayNumber - b.dayNumber || a.title.localeCompare(b.title)),
+    [materials]
+  );
+
+  const selectedMaterial = useMemo(
+    () => sortedMaterials.find((material) => material.id === selectedMaterialId) ?? sortedMaterials[0] ?? null,
+    [sortedMaterials, selectedMaterialId]
+  );
+
+  const selectedLesson = useMemo(
+    () => (selectedMaterial ? normalizeLessonContent(selectedMaterial) : null),
+    [selectedMaterial]
   );
 
   const loadCourses = async (preferredCourseId?: string) => {
@@ -141,20 +164,48 @@ const CourseManagement: React.FC = () => {
     }
   };
 
+  const loadAssignments = async (courseId: string) => {
+    if (!courseId) {
+      setAssignedUserIds([]);
+      setSelectedUserIds([]);
+      return;
+    }
+
+    try {
+      const res = await apiGet<{ userIds: string[] }>(`/admin/courses/${courseId}/assignments`);
+      const nextAssigned = res.userIds || [];
+      setAssignedUserIds(nextAssigned);
+      setSelectedUserIds(nextAssigned);
+    } catch (error: any) {
+      alert(error.message || "Failed to load assigned students");
+      setAssignedUserIds([]);
+      setSelectedUserIds([]);
+    }
+  };
+
   const loadMaterials = async (courseId: string) => {
     if (!courseId) {
       setMaterials([]);
+      setSelectedMaterialId("");
       return;
     }
-    setMaterialsLoading(true);
+
+    setLoadingMaterials(true);
     try {
-      const res = await apiGet<{ materials: Material[] }>(`/admin/courses/${courseId}/materials`);
-      setMaterials(res.materials || []);
+      const res = await apiGet<{ materials: CourseMaterial[] }>(`/admin/courses/${courseId}/materials`);
+      const fetchedMaterials = res.materials || [];
+      setMaterials(fetchedMaterials);
+      setSelectedMaterialId((current) =>
+        current && fetchedMaterials.some((material) => material.id === current)
+          ? current
+          : fetchedMaterials[0]?.id || ""
+      );
     } catch (error: any) {
-      alert(error.message || "Failed to load course materials");
+      alert(error.message || "Failed to load course material");
       setMaterials([]);
+      setSelectedMaterialId("");
     } finally {
-      setMaterialsLoading(false);
+      setLoadingMaterials(false);
     }
   };
 
@@ -164,21 +215,13 @@ const CourseManagement: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedCourseId) {
-      loadMaterials(selectedCourseId);
-    } else {
-      setMaterials([]);
-    }
+    loadAssignments(selectedCourseId);
+    loadMaterials(selectedCourseId);
   }, [selectedCourseId]);
 
   const resetCourseForm = () => {
     setCourseForm(emptyCourseForm);
     setEditingCourseId(null);
-  };
-
-  const resetMaterialForm = () => {
-    setMaterialForm(emptyMaterialForm);
-    setEditingMaterialId(null);
   };
 
   const handleSaveCourse = async (e: React.FormEvent) => {
@@ -203,7 +246,7 @@ const CourseManagement: React.FC = () => {
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm("Delete this course and all assigned materials?")) {
+    if (!window.confirm("Delete this course?")) {
       return;
     }
     try {
@@ -213,69 +256,29 @@ const CourseManagement: React.FC = () => {
       }
       await loadCourses();
       resetCourseForm();
-      resetMaterialForm();
     } catch (error: any) {
       alert(error.message || "Failed to delete course");
     }
   };
 
-  const handleAssignCourse = async () => {
+  const handleSyncAssignments = async () => {
     if (!selectedCourseId) {
       alert("Select a course first");
       return;
     }
-    if (selectedUserIds.length === 0) {
-      alert("Select at least one student");
-      return;
-    }
+    setSavingAssignments(true);
     try {
-      await apiPost(`/admin/courses/${selectedCourseId}/assign`, { userIds: selectedUserIds });
+      const res = await apiPut<{ userIds: string[]; message: string }>(`/admin/courses/${selectedCourseId}/assignments`, {
+        userIds: selectedUserIds,
+      });
+      setAssignedUserIds(res.userIds || []);
+      setSelectedUserIds(res.userIds || []);
       await loadCourses(selectedCourseId);
-      setSelectedUserIds([]);
-      alert("Course assigned successfully");
+      alert(res.message || "Assignments updated");
     } catch (error: any) {
-      alert(error.message || "Failed to assign course");
-    }
-  };
-
-  const handleSaveMaterial = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCourseId) {
-      alert("Select a course before adding material");
-      return;
-    }
-    try {
-      if (editingMaterialId) {
-        await submitMaterial(`/admin/courses/materials/${editingMaterialId}`, "PUT", materialForm);
-      } else {
-        await submitMaterial(`/admin/courses/${selectedCourseId}/materials`, "POST", materialForm);
-      }
-      await loadMaterials(selectedCourseId);
-      await loadCourses(selectedCourseId);
-      resetMaterialForm();
-    } catch (error: any) {
-      alert(error.message || "Failed to save material");
-    }
-  };
-
-  const handleEditMaterial = (material: Material) => {
-    setEditingMaterialId(material.id);
-    setMaterialForm({
-      dayNumber: material.dayNumber,
-      title: material.title,
-      content: material.content || "",
-    });
-  };
-
-  const handleDeleteMaterial = async (materialId: string) => {
-    if (!window.confirm("Delete this course material?")) {
-      return;
-    }
-    try {
-      await apiDelete(`/admin/courses/materials/${materialId}`);
-      await loadMaterials(selectedCourseId);
-    } catch (error: any) {
-      alert(error.message || "Failed to delete material");
+      alert(error.message || "Failed to update course assignments");
+    } finally {
+      setSavingAssignments(false);
     }
   };
 
@@ -284,7 +287,7 @@ const CourseManagement: React.FC = () => {
       <div className="page-header">
         <div>
           <h2>Course Management</h2>
-          <p className="cm-subtitle">Create courses, assign them to students, and publish day-wise material.</p>
+          <p className="cm-subtitle">Create a course, assign students, and the Day 1, Day 2, and Day 3 course pages will be available automatically to assigned learners.</p>
         </div>
       </div>
 
@@ -357,6 +360,16 @@ const CourseManagement: React.FC = () => {
                       className="cm-link"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setSelectedCourseId(course.id);
+                      }}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      className="cm-link"
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleEditCourse(course);
                       }}
                     >
@@ -384,46 +397,34 @@ const CourseManagement: React.FC = () => {
         <section className="cm-card">
           <div className="cm-card-header">
             <h3>Assign Course</h3>
-            <span className="cm-muted">{selectedCourse ? selectedCourse.name : "Select a course"}</span>
+            <div className="cm-card-header-actions">
+              <button className={`cm-filter-toggle ${showAssignFilters ? "active" : ""}`} type="button" onClick={() => setShowAssignFilters((prev) => !prev)}>
+                <span className="cm-filter-toggle-icon" aria-hidden="true">{showAssignFilters ? "−" : "+"}</span>
+                <span className="cm-filter-toggle-label">{showAssignFilters ? "Hide Filters" : "Show Filters"}</span>
+                {activeAssignFilterCount > 0 && <span className="cm-filter-toggle-count">{activeAssignFilterCount}</span>}
+              </button>
+              <span className="cm-muted">{selectedCourse ? selectedCourse.name : "Select a course"}</span>
+            </div>
           </div>
           <div className={`cm-assign-panel ${!selectedCourse ? "disabled" : ""}`}>
             {!selectedCourse && (
               <div className="cm-empty">
-                Select a course first. After that, search and filter students here before assigning them.
+                Select a course first. After that, choose the students who should be able to open the course materials.
               </div>
             )}
-            <div className="cm-filter-bar">
-              <input
-                type="text"
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                placeholder="Search by name, user ID, email, stream, college"
-                disabled={!selectedCourse}
-              />
-              <select value={streamFilter} onChange={(e) => setStreamFilter(e.target.value)} disabled={!selectedCourse}>
-                <option value="">All Streams</option>
-                {availableStreams.map((stream) => (
-                  <option key={stream} value={stream}>
-                    {stream}
-                  </option>
-                ))}
-              </select>
-              <select value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)} disabled={!selectedCourse}>
-                <option value="">All Colleges</option>
-                {availableColleges.map((college) => (
-                  <option key={college} value={college}>
-                    {college}
-                  </option>
-                ))}
-              </select>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "active" | "inactive" | "all")} disabled={!selectedCourse}>
-                <option value="active">Active Only</option>
-                <option value="inactive">Inactive Only</option>
-                <option value="all">All Students</option>
-              </select>
-            </div>
+            {showAssignFilters && (
+              <div className="cm-filters-panel">
+                <div className="cm-filter-bar">
+                  <ValueHelpField label="Search Students" placeholder="Search by name, user ID, email, stream, college" value={studentSearch} options={studentSearchOptions} onChange={setStudentSearch} allowFreeText disabled={!selectedCourse} />
+                  <ValueHelpField label="Stream" placeholder="All Streams" value={streamFilter} options={streamOptions} onChange={setStreamFilter} disabled={!selectedCourse} />
+                  <ValueHelpField label="College" placeholder="All Colleges" value={collegeFilter} options={collegeOptions} onChange={setCollegeFilter} disabled={!selectedCourse} />
+                  <ValueHelpField label="Status" placeholder="Active Only" value={statusFilter} options={statusOptions} onChange={(value) => setStatusFilter(value as "active" | "inactive" | "all")} disabled={!selectedCourse} />
+                </div>
+              </div>
+            )}
             <div className="cm-selection-meta">
               <span>{filteredStudents.length} students shown</span>
+              <span>{assignedUserIds.length} currently assigned</span>
               <button
                 type="button"
                 className="secondary-btn"
@@ -440,11 +441,17 @@ const CourseManagement: React.FC = () => {
                 {areAllFilteredStudentsSelected ? "Deselect All" : "Select All"}
               </button>
             </div>
+            <div className="cm-assignment-summary">
+              <span>{assignmentChanges.added.length} to add</span>
+              <span>{assignmentChanges.removed.length} to remove</span>
+              <span>{selectedUserIds.length} selected</span>
+            </div>
             <div className="cm-student-list">
               {filteredStudents.map((student) => {
                 const checked = selectedUserIds.includes(student.userId);
+                const alreadyAssigned = assignedUserIds.includes(student.userId);
                 return (
-                  <label key={student.id} className="cm-student-item">
+                  <label key={student.id} className={`cm-student-item ${alreadyAssigned ? "assigned" : ""}`}>
                     <input
                       type="checkbox"
                       checked={checked}
@@ -452,7 +459,7 @@ const CourseManagement: React.FC = () => {
                       onChange={(e) => {
                         const isChecked = e.target.checked;
                         setSelectedUserIds((prev) =>
-                          isChecked ? [...prev, student.userId] : prev.filter((id) => id !== student.userId)
+                          isChecked ? Array.from(new Set([...prev, student.userId])) : prev.filter((id) => id !== student.userId)
                         );
                       }}
                     />
@@ -460,12 +467,13 @@ const CourseManagement: React.FC = () => {
                     <small>{student.userId}</small>
                     <small>{student.courseStream || "No stream"}</small>
                     <small>{student.collegeName || "No college"}</small>
+                    <small>{alreadyAssigned ? "Assigned" : "Not assigned"}</small>
                   </label>
                 );
               })}
             </div>
-            <button className="primary-btn" type="button" onClick={handleAssignCourse} disabled={!selectedCourse}>
-              Assign Selected Students
+            <button className="primary-btn" type="button" onClick={handleSyncAssignments} disabled={!selectedCourse || savingAssignments}>
+              {savingAssignments ? "Saving..." : "Save Course Assignments"}
             </button>
           </div>
         </section>
@@ -474,82 +482,47 @@ const CourseManagement: React.FC = () => {
       <div className="cm-grid">
         <section className="cm-card">
           <div className="cm-card-header">
-            <h3>{editingMaterialId ? "Edit Material" : "Create Day-wise Material"}</h3>
+            <h3>Preview Course Material</h3>
             <span className="cm-muted">{selectedCourse ? selectedCourse.name : "Select a course"}</span>
           </div>
-          <form className="cm-form" onSubmit={handleSaveMaterial}>
-            <label>
-              Day Number
-              <input
-                type="number"
-                min={1}
-                value={materialForm.dayNumber}
-                onChange={(e) => setMaterialForm((prev) => ({ ...prev, dayNumber: Number(e.target.value) }))}
-                required
-              />
-            </label>
-            <label>
-              Title
-              <input
-                type="text"
-                value={materialForm.title}
-                onChange={(e) => setMaterialForm((prev) => ({ ...prev, title: e.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Page Content
-              <textarea
-                value={materialForm.content}
-                onChange={(e) => setMaterialForm((prev) => ({ ...prev, content: e.target.value }))}
-                rows={10}
-                placeholder="Write the day-wise reading content that students should see in the portal."
-                required
-              />
-            </label>
-            <div className="cm-helper-text">This material is text-only and will be shown as a readable page to students.</div>
-            <div className="cm-actions">
-              <button type="submit" className="primary-btn" disabled={!selectedCourseId}>
-                {editingMaterialId ? "Update Material" : "Add Material"}
-              </button>
-              {editingMaterialId && (
-                <button type="button" className="secondary-btn" onClick={resetMaterialForm}>
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-        </section>
-        <section className="cm-card">
-          <div className="cm-card-header">
-            <h3>Course Material Library</h3>
-            <span className="cm-muted">{selectedCourse ? selectedCourse.name : "Select a course"}</span>
-          </div>
-          {materialsLoading ? (
-            <div className="cm-empty">Loading materials...</div>
-          ) : materials.length === 0 ? (
-            <div className="cm-empty">No day-wise material added for this course yet.</div>
+
+          {!selectedCourse ? (
+            <div className="cm-empty">Select a course to preview its day-wise material.</div>
+          ) : loadingMaterials ? (
+            <div className="cm-empty">Loading course material...</div>
+          ) : sortedMaterials.length === 0 ? (
+            <div className="cm-empty">No material is available for this course yet.</div>
           ) : (
-            <div className="cm-material-list">
-              {materials.map((material) => (
-                <article key={material.id} className="cm-material-card">
-                  <div className="cm-material-head">
-                    <div>
-                      <span className="cm-day-pill">Day {material.dayNumber}</span>
-                      <h4>{material.title}</h4>
-                    </div>
-                    <div className="cm-inline-actions">
-                      <button type="button" className="secondary-btn" onClick={() => handleEditMaterial(material)}>
-                        Edit
-                      </button>
-                      <button type="button" className="logout-btn cm-danger-btn" onClick={() => handleDeleteMaterial(material.id)}>
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  {material.content && <p>{material.content}</p>}
-                </article>
-              ))}
+            <div className="cm-preview-panel">
+              <div className="cm-preview-toolbar">
+                {sortedMaterials.map((material) => (
+                  <button
+                    key={material.id}
+                    type="button"
+                    className={`cm-preview-chip ${selectedMaterial?.id === material.id ? "active" : ""}`}
+                    onClick={() => setSelectedMaterialId(material.id)}
+                  >
+                    Day {material.dayNumber}
+                  </button>
+                ))}
+              </div>
+
+              {selectedMaterial && (
+                <div className="cm-preview-body">
+                  {selectedLesson ? (
+                    <LessonView lesson={selectedLesson} material={selectedMaterial} />
+                  ) : (
+                    <article className="student-material-card">
+                      <div className="student-material-day">Day {selectedMaterial.dayNumber}</div>
+                      <div className="student-material-content">
+                        <h4>{selectedMaterial.title}</h4>
+                        {selectedMaterial.summary && <p className="student-material-summary">{selectedMaterial.summary}</p>}
+                        <p>{selectedMaterial.content || "Course material shared for this day is available below."}</p>
+                      </div>
+                    </article>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </section>

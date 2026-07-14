@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import "./UserManagement.css";
 import { apiGet, apiPost, apiDelete, apiPut } from "../services/api";
+import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
 
 // ─── SVG Icon Components ──────────────────────────────────────────────────────
 
@@ -588,6 +589,21 @@ const UserManagement: React.FC = () => {
   const uStreams  = useMemo(() => [...new Set(users.map(u => u.courseStream).filter(Boolean) as string[])].sort(), [users]);
   const uGenders  = useMemo(() => [...new Set(users.map(u => u.gender).filter(Boolean) as string[])].sort(), [users]);
   const uCerts    = useMemo(() => [...new Set(users.map(u => u.sapCertification).filter(Boolean) as string[])].sort(), [users]);
+  const userSearchOptions = useMemo<ValueHelpOption[]>(() => {
+    const unique = Array.from(new Set(users.flatMap((u) => [
+      u.name, u.email, u.userId, u.naxUnid, u.mobile, u.collegeName, u.courseStream, u.gender, u.sapCertification,
+    ]).filter(Boolean) as string[]));
+    return unique.slice(0, 40).map((item) => ({ value: item, label: item }));
+  }, [users]);
+  const collegeOptions: ValueHelpOption[] = [{ value: "", label: "All Colleges" }, ...uColleges.map((value) => ({ value, label: value }))];
+  const streamOptions: ValueHelpOption[] = [{ value: "", label: "All Streams" }, ...uStreams.map((value) => ({ value, label: value }))];
+  const genderOptions: ValueHelpOption[] = [{ value: "", label: "All Genders" }, ...uGenders.map((value) => ({ value, label: value }))];
+  const statusOptions: ValueHelpOption[] = [
+    { value: "", label: "All Status" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+  ];
+  const certOptions: ValueHelpOption[] = [{ value: "", label: "All Certifications" }, ...uCerts.map((value) => ({ value, label: value }))];
 
   const activeFilterCount = [fCollege, fStream, fGender, fStatus, fCert, fCgpaMin, fCgpaMax, fDateFrom, fDateTo].filter(Boolean).length;
 
@@ -788,10 +804,14 @@ const UserManagement: React.FC = () => {
         </div>
         <div className="um-toolbar">
           <div className="um-search-wrap">
-            <span className="um-search-icon"><Icon.Search /></span>
-            <input className="um-search" type="text"
-              placeholder="Search name, email, ID, UNID, mobile…"
-              value={search} onChange={e => setSearch(e.target.value)} />
+            <ValueHelpField
+              label="Search Users"
+              placeholder="Search name, email, ID, UNID, mobile..."
+              value={search}
+              options={userSearchOptions}
+              onChange={setSearch}
+              allowFreeText
+            />
           </div>
           <button className={`um-btn ${showFilters ? "active" : ""}`} onClick={() => setShowFilters(s => !s)}>
             <Icon.Filter /> Filters
@@ -862,40 +882,19 @@ const UserManagement: React.FC = () => {
           </div>
           <div className="um-filter-grid">
             <div className="form-group">
-              <label>College</label>
-              <select value={fCollege} onChange={e => setFCollege(e.target.value)}>
-                <option value="">All Colleges</option>
-                {uColleges.map(c => <option key={c}>{c}</option>)}
-              </select>
+              <ValueHelpField label="College" placeholder="All Colleges" value={fCollege} options={collegeOptions} onChange={setFCollege} />
             </div>
             <div className="form-group">
-              <label>Course Stream</label>
-              <select value={fStream} onChange={e => setFStream(e.target.value)}>
-                <option value="">All Streams</option>
-                {uStreams.map(s => <option key={s}>{s}</option>)}
-              </select>
+              <ValueHelpField label="Course Stream" placeholder="All Streams" value={fStream} options={streamOptions} onChange={setFStream} />
             </div>
             <div className="form-group">
-              <label>Gender</label>
-              <select value={fGender} onChange={e => setFGender(e.target.value)}>
-                <option value="">All Genders</option>
-                {uGenders.map(g => <option key={g}>{g}</option>)}
-              </select>
+              <ValueHelpField label="Gender" placeholder="All Genders" value={fGender} options={genderOptions} onChange={setFGender} />
             </div>
             <div className="form-group">
-              <label>Account Status</label>
-              <select value={fStatus} onChange={e => setFStatus(e.target.value)}>
-                <option value="">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+              <ValueHelpField label="Account Status" placeholder="All Status" value={fStatus} options={statusOptions} onChange={setFStatus} />
             </div>
             <div className="form-group">
-              <label>SAP Certification</label>
-              <select value={fCert} onChange={e => setFCert(e.target.value)}>
-                <option value="">All Certifications</option>
-                {uCerts.map(c => <option key={c}>{c}</option>)}
-              </select>
+              <ValueHelpField label="SAP Certification" placeholder="All Certifications" value={fCert} options={certOptions} onChange={setFCert} />
             </div>
             <div className="form-group">
               <label>CGPA Min</label>

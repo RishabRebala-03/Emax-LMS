@@ -38,6 +38,31 @@ export async function apiPut<T>(url: string, body: any): Promise<T> {
   return handleResponse<T>(res);
 }
 
+export async function apiPatch<T>(url: string, body: any): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return handleResponse<T>(res);
+}
+
+export async function apiPostForm<T>(url: string, body: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method: "POST",
+    body,
+  });
+  return handleResponse<T>(res);
+}
+
+export async function apiPutForm<T>(url: string, body: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method: "PUT",
+    body,
+  });
+  return handleResponse<T>(res);
+}
+
 export async function apiDelete<T>(url: string): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, { method: "DELETE" });
   return handleResponse<T>(res);
