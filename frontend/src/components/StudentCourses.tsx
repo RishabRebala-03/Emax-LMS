@@ -120,6 +120,15 @@ export function LessonBlockView({ block }: { block: LessonBlock }) {
 }
 
 export function LessonView({ lesson, material }: { lesson: LessonContent; material: CourseMaterial }) {
+  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveSectionIndex(0);
+  }, [lesson.slug, material.id]);
+
+  const totalSections = lesson.sections.length;
+  const activeSection = lesson.sections[activeSectionIndex];
+
   return (
     <article className="student-material-card lesson">
       <div className="student-lesson-shell">
@@ -134,14 +143,50 @@ export function LessonView({ lesson, material }: { lesson: LessonContent; materi
         </section>
 
         <nav className="student-lesson-nav">
-          {lesson.toc.map((item) => (
-            <a key={item.id} href={`#${item.id}`}>{item.label}</a>
+          {lesson.sections.map((section, index) => (
+            <button
+              key={section.id}
+              type="button"
+              className={`student-lesson-nav-chip ${index === activeSectionIndex ? "active" : ""}`}
+              onClick={() => setActiveSectionIndex(index)}
+            >
+              {section.title}
+            </button>
           ))}
         </nav>
 
-        <section className="student-lesson-sections">
-          {lesson.sections.map((section) => (
-            <article key={section.id} id={section.id} className="student-lesson-section">
+        <div className="student-lesson-pagination">
+          <div className="student-lesson-page-status">
+            <span className="student-course-pill">Section {activeSectionIndex + 1} of {totalSections}</span>
+            <strong>{activeSection?.title}</strong>
+          </div>
+          <div className="student-lesson-page-actions">
+            <button
+              type="button"
+              className="student-lesson-page-button"
+              onClick={() => setActiveSectionIndex((current) => Math.max(current - 1, 0))}
+              disabled={activeSectionIndex === 0}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="student-lesson-page-button primary"
+              onClick={() => setActiveSectionIndex((current) => Math.min(current + 1, totalSections - 1))}
+              disabled={activeSectionIndex === totalSections - 1}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
+        <section className="student-lesson-carousel" aria-live="polite">
+          <div
+            className="student-lesson-track"
+            style={{ transform: `translateX(-${activeSectionIndex * 100}%)` }}
+          >
+            {lesson.sections.map((section) => (
+              <article key={section.id} id={section.id} className="student-lesson-section">
               <h5>{section.title}</h5>
               {section.intro && <p className="student-section-intro">{renderRichText(section.intro)}</p>}
               <div className="student-section-blocks">
@@ -150,7 +195,8 @@ export function LessonView({ lesson, material }: { lesson: LessonContent; materi
                 ))}
               </div>
             </article>
-          ))}
+            ))}
+          </div>
         </section>
       </div>
     </article>
