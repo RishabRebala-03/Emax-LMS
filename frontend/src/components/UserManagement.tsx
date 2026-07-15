@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import "./UserManagement.css";
-import { apiGet, apiPost, apiDelete, apiPut } from "../services/api";
+import { API_BASE, apiGet, apiPost, apiDelete, apiPut } from "../services/api";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
 
 // ─── SVG Icon Components ──────────────────────────────────────────────────────
@@ -718,7 +718,7 @@ const UserManagement: React.FC = () => {
     if (generatingOffer) return;
     setGeneratingOffer(user.id);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/admin/offer-letter/${user.id}`);
+      const response = await fetch(`${API_BASE}/admin/offer-letter/${user.id}`);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.error || "Failed to generate offer letter");

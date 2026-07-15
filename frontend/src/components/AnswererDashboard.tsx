@@ -6,13 +6,14 @@ import { apiGet, apiPost } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import AppIcon from "./AppIcons";
 
-type AnswererView = "dashboard" | "tests" | "history" | "courses";
+type AnswererView = "dashboard" | "tests" | "history" | "courses" | "account-security";
 
 const viewToPath: Record<AnswererView, string> = {
   'dashboard': '/dashboard',
   'tests':     '/dashboard/tests',
   'history':   '/dashboard/history',
   'courses':   '/dashboard/courses',
+  'account-security': '/dashboard/account-security',
 };
 
 const pathToView: Record<string, AnswererView> = {
@@ -20,6 +21,7 @@ const pathToView: Record<string, AnswererView> = {
   '/dashboard/tests':   'tests',
   '/dashboard/history': 'history',
   '/dashboard/courses': 'courses',
+  '/dashboard/account-security': 'account-security',
 };
 
 interface Props {
@@ -67,6 +69,17 @@ interface TestHistoryItem {
   timeSpentSec: number;
 }
 
+interface AccountSecurityInfo {
+  userId: string;
+  name: string;
+  email: string;
+  collegeEmail: string;
+  collegeEmailMasked: string;
+  isActive: boolean;
+  lastLoginAt?: string | null;
+  unlockMethod?: string;
+}
+
 const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
 const navigate = useNavigate();
 const location = useLocation();
@@ -85,6 +98,13 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   const [loadingTests, setLoadingTests] = useState(false);
   const [testHistory, setTestHistory] = useState<TestHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [accountSecurity, setAccountSecurity] = useState<AccountSecurityInfo | null>(null);
+  const [loadingSecurity, setLoadingSecurity] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [unlockMessage, setUnlockMessage] = useState("");
+  const [unlockOtp, setUnlockOtp] = useState("");
+  const [unlockError, setUnlockError] = useState("");
 
   // when user chooses a test, we load it and render TestInterface
   const [activeExam, setActiveExam] = useState<ExamForTaking | null>(null);
@@ -150,11 +170,38 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
     }
   };
 
+  const loadAccountSecurity = async () => {
+    setLoadingSecurity(true);
+    try {
+      const res = await apiGet<{ account: AccountSecurityInfo }>(
+        `/answerer/account-security?userId=${encodeURIComponent(userName)}`
+      );
+      setAccountSecurity(res.account);
+    } catch (e) {
+      console.error(e);
+      setAccountSecurity(null);
+    } finally {
+      setLoadingSecurity(false);
+    }
+  };
+
   useEffect(() => {
     loadInsights();
     loadAssignedTests();
     loadTestHistory();
+    if (activeView === "account-security") {
+      loadAccountSecurity();
+    }
   }, [userName]);
+
+  useEffect(() => {
+    if (activeView === "account-security") {
+      loadAccountSecurity();
+      setUnlockMessage("");
+      setUnlockError("");
+      setUnlockOtp("");
+    }
+  }, [activeView]);
 
   const startExam = async (examId: string) => {
     setLoadingExam(true);
@@ -202,6 +249,46 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   // Store the current view before entering test mode for proper highlighting
   const showSidebar = activeView !== "tests" || !activeExam;
 
+  const handleRequestOtp = async () => {
+    setSendingOtp(true);
+    setUnlockError("");
+    setUnlockMessage("");
+    try {
+      const res = await apiPost<{ message: string; collegeEmailMasked: string }>(
+        "/answerer/account-security/otp/request",
+        { userId: userName }
+      );
+      setUnlockMessage(`${res.message}. Sent to ${res.collegeEmailMasked}.`);
+      await loadAccountSecurity();
+    } catch (err: any) {
+      setUnlockError(err?.message || "Failed to send verification code");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!unlockOtp.trim()) {
+      setUnlockError("Enter the 6-digit verification code");
+      return;
+    }
+    setVerifyingOtp(true);
+    setUnlockError("");
+    try {
+      await apiPost("/answerer/account-security/otp/verify", {
+        userId: userName,
+        otp: unlockOtp.trim(),
+      });
+      setUnlockMessage("Your account has been unlocked successfully.");
+      setUnlockOtp("");
+      await Promise.all([loadAccountSecurity(), loadInsights()]);
+    } catch (err: any) {
+      setUnlockError(err?.message || "Failed to verify the code");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
   return (
     <div className="answerer-container">
       {/* Sidebar hidden during exam view */}
@@ -247,6 +334,14 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
             >
               <AppIcon name="history" className="nav-icon" />
               History
+            </button>
+
+            <button 
+              className={`nav-item ${activeView === "account-security" ? "active" : ""}`}
+              onClick={() => setActiveView("account-security")}
+            >
+              <AppIcon name="security" className="nav-icon" />
+              SAP account security
             </button>
           </nav>
 
@@ -477,6 +572,104 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
             </div>
 
             <StudentCourses userId={userName} />
+          </>
+        )}
+
+        {activeView === "account-security" && (
+          <>
+            <div className="dashboard-topbar">
+              <div className="dashboard-topbar-left">
+                <span className="dashboard-title">SAP account security</span>
+              </div>
+              <div className="dashboard-topbar-right">{today}</div>
+            </div>
+
+            <div className="security-page">
+              <div className="security-hero card-surface">
+                <div className="security-hero-copy">
+                  <span className="security-kicker">Student only</span>
+                  <h2>Unlock your SAP account user with a verified code</h2>
+                  <p>
+                    Request a one-time passcode to your college email, then enter it here to restore access to your SAP account user.
+                  </p>
+                </div>
+                <div className="security-hero-meta">
+                  <div className="security-status-pill">
+                    <AppIcon name="security" className="security-status-icon" />
+                    {accountSecurity?.isActive ? "SAP account user active" : "SAP account user locked"}
+                  </div>
+                  <p className="security-note">
+                    This flow is available only for the signed-in SAP account user.
+                  </p>
+                </div>
+              </div>
+
+              <div className="security-grid">
+                <section className="security-panel card-surface">
+                  <h3>SAP account user details</h3>
+                  {loadingSecurity && <p className="security-muted">Loading your security profile...</p>}
+                  {!loadingSecurity && accountSecurity && (
+                    <div className="security-details">
+                      <div className="security-row">
+                        <span>SAP account user name</span>
+                        <strong>{accountSecurity.name || userName}</strong>
+                      </div>
+                      <div className="security-row">
+                        <span>User ID</span>
+                        <strong>{accountSecurity.userId || userName}</strong>
+                      </div>
+                      <div className="security-row">
+                        <span>College email</span>
+                        <strong>{accountSecurity.collegeEmailMasked || "Not available"}</strong>
+                      </div>
+                      <div className="security-row">
+                        <span>Current status</span>
+                        <strong>{accountSecurity.isActive ? "Active" : "Inactive"}</strong>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <section className="security-panel card-surface">
+                  <h3>SAP account unlock</h3>
+                  <p className="security-muted">
+                    Step 1: send a verification code to your college email.
+                  </p>
+
+                  <button
+                    className="primary-btn large security-action-btn"
+                    onClick={handleRequestOtp}
+                    disabled={sendingOtp}
+                  >
+                    {sendingOtp ? "Sending code..." : "Send OTP to college email"}
+                  </button>
+
+                  <div className="otp-entry">
+                    <label htmlFor="unlockOtp">Enter OTP</label>
+                    <input
+                      id="unlockOtp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={unlockOtp}
+                      onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    />
+                  </div>
+
+                  <button
+                    className="secondary-btn security-action-btn"
+                    onClick={handleVerifyOtp}
+                    disabled={verifyingOtp}
+                  >
+                    {verifyingOtp ? "Verifying..." : "Unlock SAP account user"}
+                  </button>
+
+                  {unlockMessage && <div className="security-feedback success">{unlockMessage}</div>}
+                  {unlockError && <div className="security-feedback error">{unlockError}</div>}
+                </section>
+              </div>
+            </div>
           </>
         )}
 

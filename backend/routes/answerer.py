@@ -1,6 +1,12 @@
 from flask import Blueprint, jsonify, request
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
+import hashlib
+import hmac
+import os
+import secrets
+import smtplib
+from email.message import EmailMessage
 
 from config.db import get_db
 from utils.json import to_jsonable
@@ -9,6 +15,192 @@ from utils.validators import require_fields
 from services.scoring import compute_result
 
 answerer_bp = Blueprint("answerer", __name__)
+
+
+def _normalize_user_id(value: str) -> str:
+    return str(value or "").strip()
+
+
+def _mask_email(email: str) -> str:
+    email = (email or "").strip()
+    if "@" not in email:
+        return email
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        masked_local = local[0] + "*"
+    else:
+        masked_local = local[0] + "*" * max(2, len(local) - 2) + local[-1]
+    return f"{masked_local}@{domain}"
+
+
+def _otp_hash(user_id: str, otp: str, salt: str) -> str:
+    return hashlib.sha256(f"{user_id}:{otp}:{salt}".encode("utf-8")).hexdigest()
+
+
+def _send_otp_email(to_email: str, otp: str, user_name: str) -> None:
+    host = os.getenv("SMTP_HOST", "").strip()
+    port = int(os.getenv("SMTP_PORT", "587"))
+    username = os.getenv("SMTP_USERNAME", "").strip()
+    password = os.getenv("SMTP_PASSWORD", "").strip()
+    sender = os.getenv("SMTP_FROM_EMAIL", username or "").strip()
+    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() not in ("0", "false", "no")
+    if not host or not sender:
+        raise RuntimeError("SMTP is not configured")
+
+    message = EmailMessage()
+    message["Subject"] = "Your SAP account user unlock verification code"
+    message["From"] = sender
+    message["To"] = to_email
+    message.set_content(
+        f"Hello {user_name or 'Student'},\n\n"
+        f"Your one-time verification code to unlock your SAP account user is: {otp}\n\n"
+        "This code expires in 10 minutes. If you did not request this, you can ignore this email."
+    )
+
+    with smtplib.SMTP(host, port, timeout=15) as smtp:
+        if use_tls:
+            smtp.starttls()
+        if username:
+            smtp.login(username, password)
+        smtp.send_message(message)
+
+
+@answerer_bp.get("/account-security")
+def get_account_security():
+    userId = _normalize_user_id(request.args.get("userId"))
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    user = db.users.find_one({
+        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "role": "answerer",
+    })
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        "account": to_jsonable({
+            "userId": user.get("userId"),
+            "name": user.get("name"),
+            "email": user.get("email"),
+            "collegeEmail": user.get("collegeEmail"),
+            "isActive": user.get("isActive", True),
+            "lastLoginAt": user.get("lastLoginAt"),
+            "unlockMethod": "college_email_otp",
+            "collegeEmailMasked": _mask_email(user.get("collegeEmail", "")),
+        })
+    })
+
+
+@answerer_bp.post("/account-security/otp/request")
+def request_account_unlock_otp():
+    payload = request.get_json(silent=True) or {}
+    ok, msg = require_fields(payload, ["userId"])
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    userId = _normalize_user_id(payload["userId"])
+    db = get_db()
+    user = db.users.find_one({
+        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "role": "answerer",
+    })
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    college_email = str(user.get("collegeEmail") or "").strip().lower()
+    if not college_email:
+        return jsonify({"error": "College email is not available for this SAP account user"}), 400
+
+    otp = f"{secrets.randbelow(1000000):06d}"
+    salt = secrets.token_hex(16)
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    otp_doc = {
+        "userId": user.get("userId") or userId,
+        "email": college_email,
+        "salt": salt,
+        "otpHash": _otp_hash(userId, otp, salt),
+        "expiresAt": expires_at,
+        "attempts": 0,
+        "createdAt": datetime.utcnow(),
+        "usedAt": None,
+    }
+
+    db.account_security_otps.update_one(
+        {"userId": user.get("userId") or userId, "email": college_email},
+        {"$set": otp_doc},
+        upsert=True,
+    )
+
+    try:
+        _send_otp_email(college_email, otp, user.get("name", "Student"))
+    except Exception as exc:
+        return jsonify({
+            "error": "Unable to send verification email",
+            "details": str(exc),
+        }), 503
+
+    return jsonify({
+        "message": "Verification code sent to your college email address",
+        "expiresInMinutes": 10,
+        "collegeEmailMasked": _mask_email(college_email),
+    })
+
+
+@answerer_bp.post("/account-security/otp/verify")
+def verify_account_unlock_otp():
+    payload = request.get_json(silent=True) or {}
+    ok, msg = require_fields(payload, ["userId", "otp"])
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    userId = _normalize_user_id(payload["userId"])
+    otp = str(payload["otp"]).strip()
+    if len(otp) != 6 or not otp.isdigit():
+        return jsonify({"error": "Enter a valid 6-digit code"}), 400
+
+    db = get_db()
+    user = db.users.find_one({
+        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "role": "answerer",
+    })
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    college_email = str(user.get("collegeEmail") or "").strip().lower()
+    otp_doc = db.account_security_otps.find_one({
+        "userId": user.get("userId") or userId,
+        "email": college_email,
+        "usedAt": None,
+    })
+    if not otp_doc:
+        return jsonify({"error": "No active verification code found. Please request a new one."}), 404
+
+    if otp_doc.get("expiresAt") and otp_doc["expiresAt"] < datetime.utcnow():
+        return jsonify({"error": "Verification code has expired. Please request a new one."}), 410
+
+    candidate_hash = _otp_hash(userId, otp, otp_doc.get("salt", ""))
+    if not hmac.compare_digest(candidate_hash, otp_doc.get("otpHash", "")):
+        db.account_security_otps.update_one(
+            {"_id": otp_doc["_id"]},
+            {"$inc": {"attempts": 1}}
+        )
+        return jsonify({"error": "Invalid verification code"}), 401
+
+    now = datetime.utcnow()
+    db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"isActive": True, "unlockedAt": now, "unlockMethod": "college_email_otp"}}
+    )
+    db.account_security_otps.update_one(
+        {"_id": otp_doc["_id"]},
+        {"$set": {"usedAt": now}}
+    )
+    return jsonify({
+        "message": "SAP account user unlocked successfully",
+        "isActive": True,
+    })
 
 @answerer_bp.get("/dashboard")
 def dashboard():

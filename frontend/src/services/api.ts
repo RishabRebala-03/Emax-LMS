@@ -1,4 +1,4 @@
-const API_BASE = process.env.REACT_APP_API_BASE_URL;
+export const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
