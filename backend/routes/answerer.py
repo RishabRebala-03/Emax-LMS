@@ -34,7 +34,6 @@ SAP_ODATA_PASSWORD = "Naxrita@2026"
 SAP_UNLOCK_ACTION = "UnLock"
 SAP_UNLOCK_WINDOW_MINUTES = 5
 
-
 def _normalize_user_id(value: str) -> str:
     return str(value or "").strip()
 
