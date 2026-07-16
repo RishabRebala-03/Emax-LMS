@@ -309,7 +309,7 @@ const EditUserModal: React.FC<{
           <p className="um-modal-loading">Loading options…</p>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="modal-form">
           {/* Row 1 */}
           <div className="form-row">
             <div className="form-group">

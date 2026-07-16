@@ -326,6 +326,10 @@
   gap: 0.85rem;
 }
 
+.security-details.compact {
+  margin-top: 1rem;
+}
+
 .security-row {
   display: flex;
   justify-content: space-between;
@@ -351,6 +355,24 @@
 .security-action-btn {
   width: 100%;
   margin-top: 1rem;
+}
+
+.otp-timer {
+  margin-top: 1rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.otp-timer.expired {
+  background: #fff1f0;
+  border-color: #fecdca;
+  color: #b42318;
 }
 
 .otp-entry {
@@ -958,6 +980,16 @@
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.25rem;
+}
+
+.unlock-modal-card {
+  max-width: 32rem;
+}
+
+.unlock-modal-copy {
+  margin: 0.75rem 0 0;
+  color: #4b5563;
+  line-height: 1.6;
 }
 
 /* ==================== HISTORY PAGE STYLES ==================== */

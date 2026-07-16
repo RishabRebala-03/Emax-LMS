@@ -105,6 +105,13 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   const [unlockMessage, setUnlockMessage] = useState("");
   const [unlockOtp, setUnlockOtp] = useState("");
   const [unlockError, setUnlockError] = useState("");
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [showUnlockWindow, setShowUnlockWindow] = useState(false);
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
+  const [sapUnlocking, setSapUnlocking] = useState(false);
+  const [sapUnlockError, setSapUnlockError] = useState("");
+  const [sapUnlockMessage, setSapUnlockMessage] = useState("");
 
   // when user chooses a test, we load it and render TestInterface
   const [activeExam, setActiveExam] = useState<ExamForTaking | null>(null);
@@ -200,8 +207,30 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
       setUnlockMessage("");
       setUnlockError("");
       setUnlockOtp("");
+      setOtpRequested(false);
+      setShowUnlockWindow(false);
+      setOtpExpiresAt(null);
+      setOtpSecondsLeft(0);
+      setSapUnlockError("");
+      setSapUnlockMessage("");
     }
   }, [activeView]);
+
+  useEffect(() => {
+    if (!otpRequested || !otpExpiresAt) {
+      setOtpSecondsLeft(0);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const seconds = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
+      setOtpSecondsLeft(seconds);
+    };
+
+    updateRemaining();
+    const timer = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(timer);
+  }, [otpRequested, otpExpiresAt]);
 
   const startExam = async (examId: string) => {
     setLoadingExam(true);
@@ -246,6 +275,12 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
     return `${mins}m ${secs}s`;
   };
 
+  const formatOtpCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   // Store the current view before entering test mode for proper highlighting
   const showSidebar = activeView !== "tests" || !activeExam;
 
@@ -254,11 +289,18 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
     setUnlockError("");
     setUnlockMessage("");
     try {
-      const res = await apiPost<{ message: string; collegeEmailMasked: string }>(
+      const res = await apiPost<{ message: string; collegeEmailMasked: string; expiresInMinutes: number }>(
         "/answerer/account-security/otp/request",
         { userId: userName }
       );
       setUnlockMessage(`${res.message}. Sent to ${res.collegeEmailMasked}.`);
+      setOtpRequested(true);
+      setShowUnlockWindow(false);
+      const expiresInSeconds = Math.max(1, (res.expiresInMinutes ?? 5) * 60);
+      setOtpExpiresAt(Date.now() + expiresInSeconds * 1000);
+      setOtpSecondsLeft(expiresInSeconds);
+      setSapUnlockError("");
+      setSapUnlockMessage("");
       await loadAccountSecurity();
     } catch (err: any) {
       setUnlockError(err?.message || "Failed to send verification code");
@@ -272,6 +314,10 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
       setUnlockError("Enter the 6-digit verification code");
       return;
     }
+    if (otpSecondsLeft <= 0) {
+      setUnlockError("This OTP has expired. Please request a new one.");
+      return;
+    }
     setVerifyingOtp(true);
     setUnlockError("");
     try {
@@ -279,13 +325,37 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
         userId: userName,
         otp: unlockOtp.trim(),
       });
-      setUnlockMessage("Your account has been unlocked successfully.");
+      setUnlockMessage("OTP verified successfully. You can now unlock the SAP profile.");
       setUnlockOtp("");
+      setOtpRequested(false);
+      setShowUnlockWindow(true);
+      setOtpExpiresAt(null);
+      setOtpSecondsLeft(0);
+      setSapUnlockError("");
+      setSapUnlockMessage("");
       await Promise.all([loadAccountSecurity(), loadInsights()]);
     } catch (err: any) {
       setUnlockError(err?.message || "Failed to verify the code");
     } finally {
       setVerifyingOtp(false);
+    }
+  };
+
+  const handleSapUnlock = async () => {
+    setSapUnlocking(true);
+    setSapUnlockError("");
+    setSapUnlockMessage("");
+    try {
+      const res = await apiPost<{ message: string }>("/answerer/account-security/sap-unlock", {
+        userId: userName,
+      });
+      setSapUnlockMessage(res.message || "SAP profile unlocked successfully.");
+      setUnlockMessage("SAP profile unlocked successfully.");
+      await Promise.all([loadAccountSecurity(), loadInsights()]);
+    } catch (err: any) {
+      setSapUnlockError(err?.message || "Failed to unlock SAP profile.");
+    } finally {
+      setSapUnlocking(false);
     }
   };
 
@@ -644,26 +714,36 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                     {sendingOtp ? "Sending code..." : "Send OTP to college email"}
                   </button>
 
-                  <div className="otp-entry">
-                    <label htmlFor="unlockOtp">Enter OTP</label>
-                    <input
-                      id="unlockOtp"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="000000"
-                      value={unlockOtp}
-                      onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    />
-                  </div>
+                  {otpRequested && (
+                    <>
+                      <div className={`otp-timer ${otpSecondsLeft <= 0 ? "expired" : ""}`}>
+                        {otpSecondsLeft > 0
+                          ? `OTP valid for ${formatOtpCountdown(otpSecondsLeft)}`
+                          : "OTP expired. Request a new code."}
+                      </div>
 
-                  <button
-                    className="secondary-btn security-action-btn"
-                    onClick={handleVerifyOtp}
-                    disabled={verifyingOtp}
-                  >
-                    {verifyingOtp ? "Verifying..." : "Unlock SAP account user"}
-                  </button>
+                      <div className="otp-entry">
+                        <label htmlFor="unlockOtp">Enter OTP</label>
+                        <input
+                          id="unlockOtp"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          placeholder="000000"
+                          value={unlockOtp}
+                          onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        />
+                      </div>
+
+                      <button
+                        className="secondary-btn security-action-btn"
+                        onClick={handleVerifyOtp}
+                        disabled={verifyingOtp || otpSecondsLeft <= 0}
+                      >
+                        {verifyingOtp ? "Verifying..." : "Verify OTP and unlock"}
+                      </button>
+                    </>
+                  )}
 
                   {unlockMessage && <div className="security-feedback success">{unlockMessage}</div>}
                   {unlockError && <div className="security-feedback error">{unlockError}</div>}
@@ -855,6 +935,44 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 }}
               >
                 {changingPassword ? "Updating..." : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showUnlockWindow && (
+        <div className="modal-overlay" onClick={() => setShowUnlockWindow(false)}>
+          <div className="modal-card unlock-modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Unlock SAP profile</h3>
+            <p className="unlock-modal-copy">
+              Your 6-digit verification code was verified. You can now send the SAP BASIS unlock request for this profile.
+            </p>
+            <div className="security-details compact">
+              <div className="security-row">
+                <span>User ID</span>
+                <strong>{accountSecurity?.userId || userName}</strong>
+              </div>
+              <div className="security-row">
+                <span>College email</span>
+                <strong>{accountSecurity?.collegeEmailMasked || "Not available"}</strong>
+              </div>
+              <div className="security-row">
+                <span>Status</span>
+                <strong>{accountSecurity?.isActive ? "Active" : "Inactive"}</strong>
+              </div>
+            </div>
+            {sapUnlockMessage && <div className="security-feedback success">{sapUnlockMessage}</div>}
+            {sapUnlockError && <div className="security-feedback error">{sapUnlockError}</div>}
+            <div className="modal-actions">
+              <button
+                className="primary-btn"
+                onClick={handleSapUnlock}
+                disabled={sapUnlocking}
+              >
+                {sapUnlocking ? "Unlocking..." : "Unlock SAP Profile"}
+              </button>
+              <button className="primary-btn" onClick={() => setShowUnlockWindow(false)}>
+                Close
               </button>
             </div>
           </div>
