@@ -1,6 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './TestResults.css';
 import { apiGet } from '../services/api';
+import {
+  filterResultTests,
+  filterTestResults,
+  formatDurationBand,
+  formatPassRateBand,
+  formatScoreBand,
+  formatTimeSpentBand,
+  type DateFilter,
+  type DurationBand,
+  type PassRateBand,
+  type ScoreBand,
+  type TestAttemptsFilter,
+  type TestResultsSort,
+  type TimeSpentBand,
+  type UserSort,
+} from '../utils/filterUtils';
 
 interface Test {
   id: string;
@@ -76,39 +92,6 @@ interface ValueHelpFieldProps {
 }
 
 type View = 'tests' | 'users' | 'details';
-type TestAttemptsFilter = 'all' | 'with-attempts' | 'without-attempts';
-type PassRateBand = 'all' | 'excellent' | 'good' | 'watch' | 'poor';
-type DurationBand = 'all' | 'short' | 'medium' | 'long';
-type ScoreBand = 'all' | 'topper' | 'strong' | 'average' | 'at-risk';
-type TimeSpentBand = 'all' | 'quick' | 'balanced' | 'slow';
-type DateFilter = 'all' | 'today' | 'last7' | 'last30';
-type UserSort = 'score-high' | 'score-low' | 'name' | 'date' | 'time-fast' | 'time-slow';
-
-const formatDurationBand = (minutes: number) => {
-  if (minutes <= 30) return 'short';
-  if (minutes <= 60) return 'medium';
-  return 'long';
-};
-
-const formatPassRateBand = (passRate: number) => {
-  if (passRate >= 80) return 'excellent';
-  if (passRate >= 60) return 'good';
-  if (passRate >= 40) return 'watch';
-  return 'poor';
-};
-
-const formatScoreBand = (percentage: number) => {
-  if (percentage >= 85) return 'topper';
-  if (percentage >= 70) return 'strong';
-  if (percentage >= 50) return 'average';
-  return 'at-risk';
-};
-
-const formatTimeSpentBand = (seconds: number) => {
-  if (seconds < 15 * 60) return 'quick';
-  if (seconds <= 45 * 60) return 'balanced';
-  return 'slow';
-};
 
 const ValueHelpField: React.FC<ValueHelpFieldProps> = ({
   label,
@@ -228,7 +211,7 @@ const TestResults: React.FC = () => {
   const [testAttemptsFilter, setTestAttemptsFilter] = useState<TestAttemptsFilter>('all');
   const [testPassRateBand, setTestPassRateBand] = useState<PassRateBand>('all');
   const [testDurationBand, setTestDurationBand] = useState<DurationBand>('all');
-  const [testSortBy, setTestSortBy] = useState<'recent' | 'name' | 'attempts' | 'avg-score' | 'pass-rate'>('recent');
+  const [testSortBy, setTestSortBy] = useState<TestResultsSort>('recent');
   const [showTestFilters, setShowTestFilters] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -250,7 +233,22 @@ const TestResults: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    applyFiltersAndSort();
+    setFilteredResults(
+      filterTestResults(userResults, {
+        search: searchQuery,
+        status: filterStatus,
+        college: collegeFilter,
+        sortBy,
+        minPercent,
+        maxPercent,
+        scoreBand: scoreBandFilter,
+        timeSpentBand,
+        dateFilter,
+        minScore,
+        minTimeSpentMinutes,
+        maxTimeSpentMinutes,
+      })
+    );
   }, [
     userResults,
     searchQuery,
@@ -337,148 +335,14 @@ const TestResults: React.FC = () => {
     }
   };
 
-  const applyFiltersAndSort = () => {
-    let filtered = [...userResults];
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-
-    if (normalizedSearch) {
-      filtered = filtered.filter((r) => {
-        const haystack = [
-          r.userId,
-          r.userName,
-          r.collegeName,
-          r.passed ? 'passed' : 'failed',
-          `${r.scoredMarks}`,
-          `${r.totalMarks}`,
-          `${r.percentage.toFixed(1)}%`,
-          formatScoreBand(r.percentage),
-          formatTimeSpentBand(r.timeSpentSec),
-          formatDate(r.submittedAt),
-        ]
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(normalizedSearch);
-      });
-    }
-
-    filtered = filtered.filter((r) => r.percentage >= minPercent && r.percentage <= maxPercent);
-
-    if (filterStatus === 'passed') {
-      filtered = filtered.filter((r) => r.passed);
-    } else if (filterStatus === 'failed') {
-      filtered = filtered.filter((r) => !r.passed);
-    }
-
-    if (collegeFilter !== 'all') {
-      filtered = filtered.filter((r) => (r.collegeName || '') === collegeFilter);
-    }
-
-    if (scoreBandFilter !== 'all') {
-      filtered = filtered.filter((r) => formatScoreBand(r.percentage) === scoreBandFilter);
-    }
-
-    if (timeSpentBand !== 'all') {
-      filtered = filtered.filter((r) => formatTimeSpentBand(r.timeSpentSec) === timeSpentBand);
-    }
-
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      filtered = filtered.filter((r) => {
-        const submitted = new Date(r.submittedAt);
-        if (Number.isNaN(submitted.getTime())) return false;
-        const diffMs = now.getTime() - submitted.getTime();
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
-        if (dateFilter === 'today') return diffDays < 1;
-        if (dateFilter === 'last7') return diffDays <= 7;
-        if (dateFilter === 'last30') return diffDays <= 30;
-        return true;
-      });
-    }
-
-    if (minScore > 0) {
-      filtered = filtered.filter((r) => r.scoredMarks >= minScore);
-    }
-
-    if (minTimeSpentMinutes > 0) {
-      filtered = filtered.filter((r) => r.timeSpentSec >= minTimeSpentMinutes * 60);
-    }
-
-    if (maxTimeSpentMinutes > 0) {
-      filtered = filtered.filter((r) => r.timeSpentSec <= maxTimeSpentMinutes * 60);
-    }
-
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'score-high':
-          return b.percentage - a.percentage;
-        case 'score-low':
-          return a.percentage - b.percentage;
-        case 'name':
-          return a.userName.localeCompare(b.userName);
-        case 'date':
-          return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
-        case 'time-fast':
-          return a.timeSpentSec - b.timeSpentSec;
-        case 'time-slow':
-          return b.timeSpentSec - a.timeSpentSec;
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredResults(filtered);
-  };
-
   const filteredTests = useMemo(() => {
-    const normalized = testSearch.trim().toLowerCase();
-    const next = tests.filter((test) => {
-      const matchesSearch =
-        !normalized ||
-        [
-          test.name,
-          `${test.questions} questions`,
-          `${test.duration} minutes`,
-          `${test.totalAttempts} attempts`,
-          `${test.avgScore.toFixed(1)}%`,
-          `${test.passRate.toFixed(1)}%`,
-          formatDurationBand(test.duration),
-          formatPassRateBand(test.passRate),
-          test.totalAttempts > 0 ? 'with attempts' : 'without attempts',
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(normalized);
-
-      const matchesAttempts =
-        testAttemptsFilter === 'all' ||
-        (testAttemptsFilter === 'with-attempts' ? test.totalAttempts > 0 : test.totalAttempts === 0);
-
-      const matchesPassRate =
-        testPassRateBand === 'all' || formatPassRateBand(test.passRate) === testPassRateBand;
-
-      const matchesDuration =
-        testDurationBand === 'all' || formatDurationBand(test.duration) === testDurationBand;
-
-      return matchesSearch && matchesAttempts && matchesPassRate && matchesDuration;
+    return filterResultTests(tests, {
+      search: testSearch,
+      attempts: testAttemptsFilter,
+      passRateBand: testPassRateBand,
+      durationBand: testDurationBand,
+      sortBy: testSortBy,
     });
-
-    next.sort((a, b) => {
-      switch (testSortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'attempts':
-          return b.totalAttempts - a.totalAttempts;
-        case 'avg-score':
-          return b.avgScore - a.avgScore;
-        case 'pass-rate':
-          return b.passRate - a.passRate;
-        case 'recent':
-        default:
-          return b.totalAttempts - a.totalAttempts;
-      }
-    });
-
-    return next;
   }, [tests, testSearch, testAttemptsFilter, testPassRateBand, testDurationBand, testSortBy]);
 
   const activeUserFilterCount = [

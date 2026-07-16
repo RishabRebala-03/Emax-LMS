@@ -99,7 +99,6 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   const [testHistory, setTestHistory] = useState<TestHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [accountSecurity, setAccountSecurity] = useState<AccountSecurityInfo | null>(null);
-  const [loadingSecurity, setLoadingSecurity] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [unlockMessage, setUnlockMessage] = useState("");
@@ -178,7 +177,6 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   };
 
   const loadAccountSecurity = async () => {
-    setLoadingSecurity(true);
     try {
       const res = await apiGet<{ account: AccountSecurityInfo }>(
         `/answerer/account-security?userId=${encodeURIComponent(userName)}`
@@ -187,8 +185,6 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
     } catch (e) {
       console.error(e);
       setAccountSecurity(null);
-    } finally {
-      setLoadingSecurity(false);
     }
   };
 
@@ -358,6 +354,39 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
       setSapUnlocking(false);
     }
   };
+
+  const isUnlockFlowActive =
+    activeView === "account-security" && (otpRequested || showUnlockWindow || sapUnlocking);
+
+  const confirmCloseUnlockFlow = () => {
+    if (!showUnlockWindow) {
+      return true;
+    }
+
+    return window.confirm("Close the SAP unlock window? Your current unlock progress may be interrupted.");
+  };
+
+  const handleCloseUnlockWindow = () => {
+    if (!confirmCloseUnlockFlow()) {
+      return;
+    }
+
+    setShowUnlockWindow(false);
+  };
+
+  useEffect(() => {
+    if (!isUnlockFlowActive) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isUnlockFlowActive]);
 
   return (
     <div className="answerer-container">
@@ -676,77 +705,54 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
 
               <div className="security-grid">
                 <section className="security-panel card-surface">
-                  <h3>SAP account user details</h3>
-                  {loadingSecurity && <p className="security-muted">Loading your security profile...</p>}
-                  {!loadingSecurity && accountSecurity && (
-                    <div className="security-details">
-                      <div className="security-row">
-                        <span>SAP account user name</span>
-                        <strong>{accountSecurity.name || userName}</strong>
-                      </div>
-                      <div className="security-row">
-                        <span>User ID</span>
-                        <strong>{accountSecurity.userId || userName}</strong>
-                      </div>
-                      <div className="security-row">
-                        <span>College email</span>
-                        <strong>{accountSecurity.collegeEmailMasked || "Not available"}</strong>
-                      </div>
-                      <div className="security-row">
-                        <span>Current status</span>
-                        <strong>{accountSecurity.isActive ? "Active" : "Inactive"}</strong>
-                      </div>
-                    </div>
-                  )}
-                </section>
-
-                <section className="security-panel card-surface">
                   <h3>SAP account unlock</h3>
                   <p className="security-muted">
                     Step 1: send a verification code to your college email.
                   </p>
 
-                  <button
-                    className="primary-btn large security-action-btn"
-                    onClick={handleRequestOtp}
-                    disabled={sendingOtp}
-                  >
-                    {sendingOtp ? "Sending code..." : "Send OTP to college email"}
-                  </button>
+                  <div className="security-form">
+                    <button
+                      className="primary-btn large security-action-btn"
+                      onClick={handleRequestOtp}
+                      disabled={sendingOtp}
+                    >
+                      {sendingOtp ? "Sending code..." : "Send OTP to college email"}
+                    </button>
 
-                  {otpRequested && (
-                    <>
-                      <div className={`otp-timer ${otpSecondsLeft <= 0 ? "expired" : ""}`}>
-                        {otpSecondsLeft > 0
-                          ? `OTP valid for ${formatOtpCountdown(otpSecondsLeft)}`
-                          : "OTP expired. Request a new code."}
-                      </div>
+                    {otpRequested && (
+                      <>
+                        <div className={`otp-timer ${otpSecondsLeft <= 0 ? "expired" : ""}`}>
+                          {otpSecondsLeft > 0
+                            ? `OTP valid for ${formatOtpCountdown(otpSecondsLeft)}`
+                            : "OTP expired. Request a new code."}
+                        </div>
 
-                      <div className="otp-entry">
-                        <label htmlFor="unlockOtp">Enter OTP</label>
-                        <input
-                          id="unlockOtp"
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          maxLength={6}
-                          placeholder="000000"
-                          value={unlockOtp}
-                          onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        />
-                      </div>
+                        <div className="otp-entry">
+                          <label htmlFor="unlockOtp">Enter OTP</label>
+                          <input
+                            id="unlockOtp"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            placeholder="000000"
+                            value={unlockOtp}
+                            onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          />
+                        </div>
 
-                      <button
-                        className="secondary-btn security-action-btn"
-                        onClick={handleVerifyOtp}
-                        disabled={verifyingOtp || otpSecondsLeft <= 0}
-                      >
-                        {verifyingOtp ? "Verifying..." : "Verify OTP and unlock"}
-                      </button>
-                    </>
-                  )}
+                        <button
+                          className="secondary-btn security-action-btn"
+                          onClick={handleVerifyOtp}
+                          disabled={verifyingOtp || otpSecondsLeft <= 0}
+                        >
+                          {verifyingOtp ? "Verifying..." : "Verify OTP and unlock"}
+                        </button>
+                      </>
+                    )}
 
-                  {unlockMessage && <div className="security-feedback success">{unlockMessage}</div>}
-                  {unlockError && <div className="security-feedback error">{unlockError}</div>}
+                    {unlockMessage && <div className="security-feedback success">{unlockMessage}</div>}
+                    {unlockError && <div className="security-feedback error">{unlockError}</div>}
+                  </div>
                 </section>
               </div>
             </div>
@@ -941,7 +947,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
         </div>
       )}
       {showUnlockWindow && (
-        <div className="modal-overlay" onClick={() => setShowUnlockWindow(false)}>
+        <div className="modal-overlay" onClick={handleCloseUnlockWindow}>
           <div className="modal-card unlock-modal-card" onClick={(e) => e.stopPropagation()}>
             <h3>Unlock SAP profile</h3>
             <p className="unlock-modal-copy">
@@ -956,10 +962,6 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                 <span>College email</span>
                 <strong>{accountSecurity?.collegeEmailMasked || "Not available"}</strong>
               </div>
-              <div className="security-row">
-                <span>Status</span>
-                <strong>{accountSecurity?.isActive ? "Active" : "Inactive"}</strong>
-              </div>
             </div>
             {sapUnlockMessage && <div className="security-feedback success">{sapUnlockMessage}</div>}
             {sapUnlockError && <div className="security-feedback error">{sapUnlockError}</div>}
@@ -971,7 +973,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               >
                 {sapUnlocking ? "Unlocking..." : "Unlock SAP Profile"}
               </button>
-              <button className="primary-btn" onClick={() => setShowUnlockWindow(false)}>
+              <button className="primary-btn" onClick={handleCloseUnlockWindow}>
                 Close
               </button>
             </div>

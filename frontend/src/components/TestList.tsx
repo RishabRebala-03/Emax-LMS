@@ -2,6 +2,16 @@ import React, { useEffect, useMemo, useState } from "react";
 import "./TestList.css";
 import { apiDelete, apiGet, apiPost } from "../services/api";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
+import {
+  filterAdminTests,
+  filterAssignableStudents,
+  type RelativeDateFilter,
+  type TestDurationBand,
+  type TestQuestionBand,
+  type TestCutoffBand,
+  type SectionCountBand,
+  type AssignmentLoadBand,
+} from "../utils/filterUtils";
 
 interface Section {
   id: string;
@@ -38,29 +48,10 @@ interface TestListProps {
   onEditTest?: (testId: string) => void;
 }
 
-type RelativeDateFilter = "all" | "today" | "last7" | "last30" | "older";
 type TestSortBy =
   "newest" | "oldest" | "updated" | "name" | "duration-high" | "duration-low" |
   "questions-high" | "questions-low" | "cutoff-high" | "cutoff-low" |
   "assignments-high" | "assignments-low";
-
-const parseNumericInput = (value: string) => {
-  if (value.trim() === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const getRelativeDateMatch = (value: string | undefined, range: RelativeDateFilter) => {
-  if (range === "all") return true;
-  if (!value) return false;
-  const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return false;
-  const ageInDays = (Date.now() - timestamp) / (1000 * 60 * 60 * 24);
-  if (range === "today") return ageInDays <= 1;
-  if (range === "last7") return ageInDays <= 7;
-  if (range === "last30") return ageInDays <= 30;
-  return ageInDays > 30;
-};
 
 const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   const [tests, setTests] = useState<Test[]>([]);
@@ -75,12 +66,12 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [testSearch, setTestSearch] = useState("");
   const [testStatusFilter, setTestStatusFilter] = useState<"" | "active" | "draft" | "completed">("");
-  const [testDurationFilter, setTestDurationFilter] = useState<"all" | "short" | "medium" | "long">("all");
+  const [testDurationFilter, setTestDurationFilter] = useState<TestDurationBand>("all");
   const [testSectionFilter, setTestSectionFilter] = useState("all");
-  const [testQuestionFilter, setTestQuestionFilter] = useState<"all" | "short" | "medium" | "large">("all");
-  const [testCutoffBand, setTestCutoffBand] = useState<"all" | "easy" | "standard" | "strict">("all");
-  const [testSectionCountFilter, setTestSectionCountFilter] = useState<"all" | "single" | "few" | "many">("all");
-  const [testAssignmentFilter, setTestAssignmentFilter] = useState<"all" | "unassigned" | "light" | "heavy">("all");
+  const [testQuestionFilter, setTestQuestionFilter] = useState<TestQuestionBand>("all");
+  const [testCutoffBand, setTestCutoffBand] = useState<TestCutoffBand>("all");
+  const [testSectionCountFilter, setTestSectionCountFilter] = useState<SectionCountBand>("all");
+  const [testAssignmentFilter, setTestAssignmentFilter] = useState<AssignmentLoadBand>("all");
   const [testCollegeFilter, setTestCollegeFilter] = useState("all");
   const [createdRangeFilter, setCreatedRangeFilter] = useState<RelativeDateFilter>("all");
   const [updatedRangeFilter, setUpdatedRangeFilter] = useState<RelativeDateFilter>("all");
@@ -244,104 +235,30 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   ];
 
   const filteredTests = useMemo(() => {
-    const term = testSearch.trim().toLowerCase();
-    const minCutoffValue = parseNumericInput(minCutoff);
-    const maxCutoffValue = parseNumericInput(maxCutoff);
-    const minDurationValue = parseNumericInput(minDuration);
-    const maxDurationValue = parseNumericInput(maxDuration);
-    const minQuestionsValue = parseNumericInput(minQuestions);
-    const maxQuestionsValue = parseNumericInput(maxQuestions);
-    const minAssignmentsValue = parseNumericInput(minAssignments);
-    const maxAssignmentsValue = parseNumericInput(maxAssignments);
-
-    const next = tests.filter((test) => {
-      const sectionCount = Array.isArray(test.sections) ? test.sections.length : 0;
-      const assignmentCount = test.assignmentCount || 0;
-      const cutoff = test.passingPercentage || 0;
-      const createdAt = test.createdAt ? new Date(test.createdAt).getTime() : NaN;
-
-      const matchesStatus = testStatusFilter ? test.status === testStatusFilter : true;
-      const matchesDuration =
-        testDurationFilter === "all" ||
-        (testDurationFilter === "short" ? test.duration <= 30 : testDurationFilter === "medium" ? test.duration <= 60 : test.duration > 60);
-      const matchesSection =
-        testSectionFilter === "all" ||
-        (test.sections || []).some((section) => (typeof section === "string" ? section : section.name) === testSectionFilter);
-      const matchesQuestions =
-        testQuestionFilter === "all" ||
-        (testQuestionFilter === "short" ? test.questions <= 25 : testQuestionFilter === "medium" ? test.questions <= 50 : test.questions > 50);
-      const matchesCutoffBand =
-        testCutoffBand === "all" ||
-        (testCutoffBand === "easy" ? cutoff <= 50 : testCutoffBand === "standard" ? cutoff <= 70 : cutoff > 70);
-      const matchesSectionCount =
-        testSectionCountFilter === "all" ||
-        (testSectionCountFilter === "single" ? sectionCount <= 1 : testSectionCountFilter === "few" ? sectionCount <= 3 : sectionCount >= 4);
-      const matchesAssignments =
-        testAssignmentFilter === "all" ||
-        (testAssignmentFilter === "unassigned" ? assignmentCount === 0 : testAssignmentFilter === "light" ? assignmentCount <= 25 : assignmentCount >= 26);
-      const matchesCollege = testCollegeFilter === "all" || (test.assignedColleges || []).includes(testCollegeFilter);
-      const matchesCreatedRange = getRelativeDateMatch(test.createdAt, createdRangeFilter);
-      const matchesUpdatedRange = getRelativeDateMatch(test.updatedAt || test.createdAt, updatedRangeFilter);
-      const matchesCutoffMin = minCutoffValue === null || cutoff >= minCutoffValue;
-      const matchesCutoffMax = maxCutoffValue === null || cutoff <= maxCutoffValue;
-      const matchesDurationMin = minDurationValue === null || test.duration >= minDurationValue;
-      const matchesDurationMax = maxDurationValue === null || test.duration <= maxDurationValue;
-      const matchesQuestionsMin = minQuestionsValue === null || test.questions >= minQuestionsValue;
-      const matchesQuestionsMax = maxQuestionsValue === null || test.questions <= maxQuestionsValue;
-      const matchesAssignmentsMin = minAssignmentsValue === null || assignmentCount >= minAssignmentsValue;
-      const matchesAssignmentsMax = maxAssignmentsValue === null || assignmentCount <= maxAssignmentsValue;
-      const matchesCreatedFrom = !createdFrom || (!Number.isNaN(createdAt) && createdAt >= new Date(`${createdFrom}T00:00:00`).getTime());
-      const matchesCreatedTo = !createdTo || (!Number.isNaN(createdAt) && createdAt <= new Date(`${createdTo}T23:59:59`).getTime());
-
-      const haystack = [
-        test.name,
-        `${test.duration} min`,
-        `${test.questions}`,
-        `${cutoff}%`,
-        `${assignmentCount}`,
-        test.status,
-        ...(test.assignedColleges || []),
-        ...(test.sections || []).map((section) => typeof section === "string" ? section : section.name),
-      ].join(" ").toLowerCase();
-
-      return matchesStatus && matchesDuration && matchesSection && matchesQuestions && matchesCutoffBand &&
-        matchesSectionCount && matchesAssignments && matchesCollege && matchesCreatedRange &&
-        matchesUpdatedRange && matchesCutoffMin && matchesCutoffMax && matchesDurationMin &&
-        matchesDurationMax && matchesQuestionsMin && matchesQuestionsMax && matchesAssignmentsMin &&
-        matchesAssignmentsMax && matchesCreatedFrom && matchesCreatedTo && (!term || haystack.includes(term));
+    return filterAdminTests(tests, {
+      search: testSearch,
+      status: testStatusFilter,
+      durationBand: testDurationFilter,
+      section: testSectionFilter,
+      questionBand: testQuestionFilter,
+      cutoffBand: testCutoffBand,
+      sectionCountBand: testSectionCountFilter,
+      assignmentLoad: testAssignmentFilter,
+      college: testCollegeFilter,
+      createdRange: createdRangeFilter,
+      updatedRange: updatedRangeFilter,
+      minCutoff,
+      maxCutoff,
+      minDuration,
+      maxDuration,
+      minQuestions,
+      maxQuestions,
+      minAssignments,
+      maxAssignments,
+      createdFrom,
+      createdTo,
+      sortBy: testSortBy,
     });
-
-    next.sort((a, b) => {
-      switch (testSortBy) {
-        case "oldest":
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case "updated":
-          return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "duration-high":
-          return b.duration - a.duration;
-        case "duration-low":
-          return a.duration - b.duration;
-        case "questions-high":
-          return b.questions - a.questions;
-        case "questions-low":
-          return a.questions - b.questions;
-        case "cutoff-high":
-          return b.passingPercentage - a.passingPercentage;
-        case "cutoff-low":
-          return a.passingPercentage - b.passingPercentage;
-        case "assignments-high":
-          return (b.assignmentCount || 0) - (a.assignmentCount || 0);
-        case "assignments-low":
-          return (a.assignmentCount || 0) - (b.assignmentCount || 0);
-        case "newest":
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
-
-    return next;
   }, [
     tests, testSearch, testStatusFilter, testDurationFilter, testSectionFilter, testQuestionFilter,
     testCutoffBand, testSectionCountFilter, testAssignmentFilter, testCollegeFilter,
@@ -350,16 +267,11 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   ]);
 
   const filteredUsers = useMemo(() => {
-    const term = studentSearch.trim().toLowerCase();
-    return allUsers.filter((user) => {
-      const matchesStatus = statusFilter === "all" ? true : statusFilter === "active" ? user.isActive !== false : user.isActive === false;
-      const matchesStream = streamFilter ? user.courseStream === streamFilter : true;
-      const matchesCollege = collegeFilter ? user.collegeName === collegeFilter : true;
-      const haystack = [user.name, user.userId, user.email, user.courseStream, user.collegeName, user.gender]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return matchesStatus && matchesStream && matchesCollege && (!term || haystack.includes(term));
+    return filterAssignableStudents(allUsers, {
+      search: studentSearch,
+      stream: streamFilter,
+      college: collegeFilter,
+      status: statusFilter,
     });
   }, [allUsers, studentSearch, streamFilter, collegeFilter, statusFilter]);
 

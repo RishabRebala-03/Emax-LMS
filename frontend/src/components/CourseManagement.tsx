@@ -5,6 +5,7 @@ import "./StudentCourses.css";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
 import { LessonView } from "./StudentCourses";
 import { normalizeLessonContent, type CourseMaterialRecord } from "./courseContent";
+import { filterAssignableStudents } from "../utils/filterUtils";
 
 interface Course {
   id: string;
@@ -79,18 +80,11 @@ const CourseManagement: React.FC = () => {
   ];
 
   const filteredStudents = useMemo(() => {
-    const term = studentSearch.trim().toLowerCase();
-    return students.filter((student) => {
-      const matchesStatus =
-        statusFilter === "all" ? true : statusFilter === "active" ? student.isActive : !student.isActive;
-      const matchesStream = streamFilter ? student.courseStream === streamFilter : true;
-      const matchesCollege = collegeFilter ? student.collegeName === collegeFilter : true;
-      const haystack = [student.name, student.userId, student.email, student.courseStream, student.collegeName]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const matchesSearch = term ? haystack.includes(term) : true;
-      return matchesStatus && matchesStream && matchesCollege && matchesSearch;
+    return filterAssignableStudents(students, {
+      search: studentSearch,
+      stream: streamFilter,
+      college: collegeFilter,
+      status: statusFilter,
     });
   }, [students, studentSearch, streamFilter, collegeFilter, statusFilter]);
 

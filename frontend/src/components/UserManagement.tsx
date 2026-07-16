@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import "./UserManagement.css";
 import { API_BASE, apiGet, apiPost, apiDelete, apiPut } from "../services/api";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
+import { filterPortalUsers } from "../utils/filterUtils";
 
 // ─── SVG Icon Components ──────────────────────────────────────────────────────
 
@@ -613,30 +614,20 @@ const UserManagement: React.FC = () => {
   };
 
   const processed = useMemo(() => {
-    let out = [...users];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      out = out.filter(u =>
-        [u.name, u.email, u.userId, u.naxUnid, u.mobile, u.collegeEmail, u.collegeRollNumber, u.studentId]
-          .some(v => v?.toLowerCase().includes(q))
-      );
-    }
-    if (fCollege) out = out.filter(u => u.collegeName === fCollege);
-    if (fStream)  out = out.filter(u => u.courseStream === fStream);
-    if (fGender)  out = out.filter(u => u.gender === fGender);
-    if (fCert)    out = out.filter(u => u.sapCertification === fCert);
-    if (fStatus === "active")   out = out.filter(u => u.isActive);
-    if (fStatus === "inactive") out = out.filter(u => !u.isActive);
-    if (fCgpaMin) out = out.filter(u => (u.cgpa ?? 0) >= parseFloat(fCgpaMin));
-    if (fCgpaMax) out = out.filter(u => (u.cgpa ?? 0) <= parseFloat(fCgpaMax));
-    if (fDateFrom) out = out.filter(u => new Date(u.createdAt) >= new Date(fDateFrom));
-    if (fDateTo)   out = out.filter(u => new Date(u.createdAt) <= new Date(fDateTo + "T23:59:59"));
-    out.sort((a, b) => {
-      const av = a[sortKey] ?? ""; const bv = b[sortKey] ?? "";
-      const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
-      return sortDir === "asc" ? cmp : -cmp;
+    return filterPortalUsers(users, {
+      search,
+      college: fCollege,
+      stream: fStream,
+      gender: fGender,
+      status: fStatus,
+      certification: fCert,
+      cgpaMin: fCgpaMin,
+      cgpaMax: fCgpaMax,
+      dateFrom: fDateFrom,
+      dateTo: fDateTo,
+      sortKey,
+      sortDir,
     });
-    return out;
   }, [users, search, fCollege, fStream, fGender, fStatus, fCert, fCgpaMin, fCgpaMax, fDateFrom, fDateTo, sortKey, sortDir]);
 
   const visibleColDefs = useMemo(

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import "./DataMaintenance.css";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../services/api";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
+import { filterMasterItems } from "../utils/filterUtils";
 
 const Icon = {
   Plus: () => (
@@ -192,8 +193,7 @@ const DataMaintenance: React.FC = () => {
   };
 
   const getFilteredItems = (cat: Category): MasterItem[] => {
-    const q = searches[cat].toLowerCase();
-    return q ? masterData[cat].filter((i) => i.label.toLowerCase().includes(q)) : masterData[cat];
+    return filterMasterItems(masterData[cat], searches[cat]);
   };
 
   const maxRows = Math.max(...COLUMNS.map((c) => getFilteredItems(c.key).length), 0);

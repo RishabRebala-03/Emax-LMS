@@ -306,8 +306,11 @@
 
 .security-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
+  width: 100%;
+  max-width: 46rem;
+  margin: 0 auto;
 }
 
 .security-panel {
@@ -317,7 +320,13 @@
 .security-panel h3 {
   font-size: 1rem;
   color: #1d2d3e;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.security-form {
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
 }
 
 .security-details {
@@ -355,6 +364,8 @@
 .security-action-btn {
   width: 100%;
   margin-top: 1rem;
+  justify-content: center;
+  text-align: center;
 }
 
 .otp-timer {
@@ -410,6 +421,7 @@
   border-radius: 0.5rem;
   font-size: 0.875rem;
   line-height: 1.5;
+  text-align: center;
 }
 
 .security-feedback.success {
