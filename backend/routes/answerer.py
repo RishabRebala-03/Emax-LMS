@@ -28,7 +28,11 @@ DEFAULT_SMTP_FROM_EMAIL = "saplearning989@gmail.com"
 DEFAULT_SMTP_USE_TLS = True
 OTP_EXPIRY_MINUTES = 5
 OTP_RESEND_COOLDOWN_SECONDS = 60
-SAP_ODATA_URL = "http://183.82.103.80:8011/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet?sap-client=100"
+SAP_ODATA_SYSTEMS = {
+    "SHD": "http://183.82.103.80:8011/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet?sap-client=100",
+    "EMQ": "https://49.206.197.17:44333/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet",
+    "EMP": "https://49.206.197.17:44331/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet",
+}
 SAP_ODATA_USERNAME = "AITEST1"
 SAP_ODATA_PASSWORD = "Naxrita@2026"
 SAP_UNLOCK_ACTION = "UnLock"
@@ -74,15 +78,32 @@ def _extract_sap_error(payload_text: str) -> str:
     return payload_text.strip()
 
 
-def _unlock_sap_profile(username: str) -> dict:
+def _sap_system_config(system: str) -> dict:
+    """Return server-controlled connection details for a supported SAP system."""
+    system_key = str(system or "").strip().upper()
+    if system_key not in SAP_ODATA_SYSTEMS:
+        raise ValueError(f"Unsupported SAP system: {system_key or 'missing'}")
+
+    return {
+        "key": system_key,
+        "url": os.getenv(f"SAP_{system_key}_ODATA_URL", "").strip() or SAP_ODATA_SYSTEMS[system_key],
+        "username": os.getenv(f"SAP_{system_key}_ODATA_USERNAME", "").strip() or SAP_ODATA_USERNAME,
+        "password": os.getenv(f"SAP_{system_key}_ODATA_PASSWORD", "") or SAP_ODATA_PASSWORD,
+    }
+
+
+def _unlock_sap_profile(username: str, system: str) -> dict:
+    config = _sap_system_config(system)
     request_body = json.dumps({
         "Username": username,
         "Action": SAP_UNLOCK_ACTION,
     }).encode("utf-8")
-    basic_token = base64.b64encode(f"{SAP_ODATA_USERNAME}:{SAP_ODATA_PASSWORD}".encode("utf-8")).decode("ascii")
+    basic_token = base64.b64encode(
+        f"{config['username']}:{config['password']}".encode("utf-8")
+    ).decode("ascii")
 
     sap_request = urllib_request.Request(
-        SAP_ODATA_URL,
+        config["url"],
         data=request_body,
         method="POST",
         headers={
@@ -314,11 +335,17 @@ def verify_account_unlock_otp():
 @answerer_bp.post("/account-security/sap-unlock")
 def unlock_sap_profile():
     payload = request.get_json(silent=True) or {}
-    ok, msg = require_fields(payload, ["userId"])
+    ok, msg = require_fields(payload, ["userId", "sapSystem"])
     if not ok:
         return jsonify({"error": msg}), 400
 
     userId = _normalize_user_id(payload["userId"])
+    sap_system = str(payload["sapSystem"] or "").strip().upper()
+    if sap_system not in SAP_ODATA_SYSTEMS:
+        return jsonify({
+            "error": f"Select a valid SAP system ({', '.join(SAP_ODATA_SYSTEMS)})."
+        }), 400
+
     db = get_db()
     user = db.users.find_one({
         "$or": [{"userId": userId}, {"naxUnid": userId}],
@@ -342,7 +369,7 @@ def unlock_sap_profile():
     if not unlock_eligible_until or unlock_eligible_until < datetime.utcnow():
         return jsonify({"error": "Your OTP verification window has expired. Please request and verify a new OTP."}), 410
 
-    sap_result = _unlock_sap_profile(canonical_user_id)
+    sap_result = _unlock_sap_profile(canonical_user_id, sap_system)
     if not sap_result["ok"]:
         return jsonify({
             "error": sap_result["message"],
@@ -353,16 +380,22 @@ def unlock_sap_profile():
     now = datetime.utcnow()
     db.users.update_one(
         {"_id": user["_id"]},
-        {"$set": {"isActive": True, "unlockedAt": now, "unlockMethod": "sap_odata_otp"}}
+        {"$set": {
+            "isActive": True,
+            "unlockedAt": now,
+            "unlockMethod": "sap_odata_otp",
+            "lastUnlockedSapSystem": sap_system,
+        }}
     )
     db.account_security_otps.update_one(
         {"_id": otp_doc["_id"]},
-        {"$set": {"sapUnlockedAt": now}}
+        {"$set": {"sapUnlockedAt": now, "sapSystem": sap_system}}
     )
 
     return jsonify({
-        "message": "SAP profile unlocked successfully.",
+        "message": f"SAP profile unlocked successfully in {sap_system}.",
         "isActive": True,
+        "sapSystem": sap_system,
         "sapResponse": sap_result["body"],
     })
 

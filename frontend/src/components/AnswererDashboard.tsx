@@ -80,6 +80,10 @@ interface AccountSecurityInfo {
   unlockMethod?: string;
 }
 
+type SapSystem = "SHD" | "EMQ" | "EMP";
+
+const SAP_SYSTEMS: SapSystem[] = ["SHD", "EMQ", "EMP"];
+
 const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
 const navigate = useNavigate();
 const location = useLocation();
@@ -111,6 +115,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   const [sapUnlocking, setSapUnlocking] = useState(false);
   const [sapUnlockError, setSapUnlockError] = useState("");
   const [sapUnlockMessage, setSapUnlockMessage] = useState("");
+  const [selectedSapSystem, setSelectedSapSystem] = useState<SapSystem>("SHD");
 
   // when user chooses a test, we load it and render TestInterface
   const [activeExam, setActiveExam] = useState<ExamForTaking | null>(null);
@@ -209,6 +214,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
       setOtpSecondsLeft(0);
       setSapUnlockError("");
       setSapUnlockMessage("");
+      setSelectedSapSystem("SHD");
     }
   }, [activeView]);
 
@@ -344,6 +350,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
     try {
       const res = await apiPost<{ message: string }>("/answerer/account-security/sap-unlock", {
         userId: userName,
+        sapSystem: selectedSapSystem,
       });
       setSapUnlockMessage(res.message || "SAP profile unlocked successfully.");
       setUnlockMessage("SAP profile unlocked successfully.");
@@ -711,6 +718,21 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                   </p>
 
                   <div className="security-form">
+                    <div className="sap-system-entry">
+                      <label htmlFor="sapSystem">SAP system</label>
+                      <select
+                        id="sapSystem"
+                        value={selectedSapSystem}
+                        onChange={(e) => setSelectedSapSystem(e.target.value as SapSystem)}
+                        disabled={sendingOtp || verifyingOtp || otpRequested}
+                      >
+                        {SAP_SYSTEMS.map((system) => (
+                          <option key={system} value={system}>{system}</option>
+                        ))}
+                      </select>
+                      <span>Choose the SAP system where your account should be unlocked.</span>
+                    </div>
+
                     <button
                       className="primary-btn large security-action-btn"
                       onClick={handleRequestOtp}
@@ -961,6 +983,10 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               <div className="security-row">
                 <span>College email</span>
                 <strong>{accountSecurity?.collegeEmailMasked || "Not available"}</strong>
+              </div>
+              <div className="security-row">
+                <span>SAP system</span>
+                <strong>{selectedSapSystem}</strong>
               </div>
             </div>
             {sapUnlockMessage && <div className="security-feedback success">{sapUnlockMessage}</div>}
