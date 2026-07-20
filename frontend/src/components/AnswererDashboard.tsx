@@ -80,9 +80,9 @@ interface AccountSecurityInfo {
   unlockMethod?: string;
 }
 
-type SapSystem = "SHD" | "EMQ" | "EMP";
+type SapSystem = "SHD" | "EMQ" | "EMP" | "EMD"; // Add more SAP systems as needed
 
-const SAP_SYSTEMS: SapSystem[] = ["SHD", "EMQ", "EMP"];
+const SAP_SYSTEMS: SapSystem[] = ["SHD", "EMQ", "EMP", "EMD"];
 
 const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
 const navigate = useNavigate();
