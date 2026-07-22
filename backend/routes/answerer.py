@@ -30,7 +30,7 @@ OTP_EXPIRY_MINUTES = 5
 OTP_RESEND_COOLDOWN_SECONDS = 60
 SAP_ODATA_SYSTEMS = {
     "SHD": "http://183.82.103.80:8011/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet?sap-client=100",
-    "EMQ": "https://49.206.197.17:44333/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet",
+    "EMQ": "http://49.206.197.17:8033/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet",
     "EMP": "http://49.206.197.17:8031/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet",
     "EMD": "http://49.206.197.17:8006/sap/opu/odata/SAP/ZBSUSERODATA_SRV/UserLockSet",
 }
