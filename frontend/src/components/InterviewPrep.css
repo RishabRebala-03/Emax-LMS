@@ -1,0 +1,432 @@
+/* ─────────────────────────────────────────────
+   Interview Preparation Page
+   Matches the Answerer Dashboard design system
+───────────────────────────────────────────── */
+
+/* Page shell */
+.ip-page {
+  padding: 0 2rem 3rem;
+  max-width: 860px;
+  margin: 0 auto;
+  font-family: '72', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Header ── */
+.ip-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 2rem 0 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+}
+
+.ip-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1d2d3e;
+  margin: 0 0 0.25rem;
+}
+
+.ip-subtitle {
+  font-size: 0.875rem;
+  color: #6a6d70;
+  margin: 0;
+}
+
+.ip-edition-badge {
+  display: inline-block;
+  padding: 0.3rem 0.85rem;
+  background: #fff6d5;
+  color: #8a6a00;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 100px;
+  white-space: nowrap;
+  margin-top: 0.25rem;
+}
+
+/* ── Section filter chips ── */
+.ip-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.ip-filter-chip {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid #d1d5db;
+  border-radius: 100px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.ip-filter-chip:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.ip-filter-chip.active {
+  font-weight: 500;
+}
+
+/* ── Card wrapper ── */
+.ip-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Progress bar */
+.ip-progress-bar-track {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+
+.ip-progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.35s ease;
+}
+
+/* Main card */
+.ip-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 2rem 2.25rem 2.25rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.ip-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.ip-section-tag {
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.3rem 0.75rem;
+  border-radius: 100px;
+}
+
+.ip-q-counter {
+  font-size: 0.85rem;
+  color: #6a6d70;
+  font-weight: 400;
+}
+
+/* Question block */
+.ip-question-block {
+  margin-bottom: 2rem;
+}
+
+.ip-q-number {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+}
+
+.ip-question-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1d2d3e;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Reveal button */
+.ip-reveal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.12s ease;
+}
+
+.ip-reveal-btn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.ip-reveal-btn:active {
+  transform: translateY(0);
+}
+
+/* Answer block */
+.ip-answer-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: ip-fade-in 0.25s ease;
+}
+
+@keyframes ip-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ip-answer-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+
+.ip-answer-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.75rem;
+}
+
+.ip-answer-text {
+  font-size: 0.95rem;
+  color: #1e293b;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.ip-example-section {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+
+.ip-example-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ip-example-icon {
+  font-size: 0.9rem;
+}
+
+.ip-example-text {
+  font-size: 0.95rem;
+  color: #78350f;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.ip-hide-btn {
+  align-self: flex-start;
+  padding: 0.55rem 1.4rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ip-hide-btn:hover {
+  background: #f9fafb;
+}
+
+/* ── Navigation row ── */
+.ip-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.ip-nav-btn {
+  padding: 0.55rem 1.1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d2d3e;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.ip-nav-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.ip-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Jump form */
+.ip-jump-form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.ip-jump-input {
+  width: 68px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  text-align: center;
+  color: #1d2d3e;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ip-jump-input:focus {
+  border-color: #0070f2;
+}
+
+/* hide default number arrows */
+.ip-jump-input::-webkit-outer-spin-button,
+.ip-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+.ip-jump-btn {
+  padding: 0.5rem 0.9rem;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.ip-jump-btn:hover {
+  opacity: 0.85;
+}
+
+/* ── Dot pagination ── */
+.ip-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+}
+
+.ip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: none;
+  background: #d1d5db;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.ip-dot:hover {
+  transform: scale(1.3);
+  background: #9ca3af;
+}
+
+.ip-dot.active {
+  transform: scale(1.3);
+}
+
+/* ── Section overview shortcut ── */
+.ip-section-overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ip-overview-label {
+  font-size: 0.78rem;
+  color: #6a6d70;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ip-section-jump-btn {
+  padding: 0.28rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.ip-section-jump-btn:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.ip-section-jump-btn.active {
+  font-weight: 600;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .ip-page {
+    padding: 0 1rem 2.5rem;
+  }
+
+  .ip-card {
+    padding: 1.5rem 1.25rem 1.75rem;
+  }
+
+  .ip-question-text {
+    font-size: 1.05rem;
+  }
+
+  .ip-nav {
+    flex-wrap: wrap;
+  }
+
+  .ip-filters {
+    gap: 0.4rem;
+  }
+
+  .ip-filter-chip {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.65rem;
+  }
+}

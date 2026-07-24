@@ -176,6 +176,17 @@ def _send_otp_email(to_email: str, otp: str, user_name: str) -> None:
         smtp.send_message(message)
 
 
+@answerer_bp.get("/interview-prep/access")
+def get_interview_prep_access():
+    userId = _normalize_user_id(request.args.get("userId"))
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    doc = db.interview_prep_assignments.find_one({"userId": userId, "status": "assigned"})
+    return jsonify({"hasAccess": doc is not None})
+
+
 @answerer_bp.get("/account-security")
 def get_account_security():
     userId = _normalize_user_id(request.args.get("userId"))

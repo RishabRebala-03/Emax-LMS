@@ -8,6 +8,7 @@ from routes.admin_exams import admin_exams_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_results import admin_results_bp
 from routes.admin_courses import admin_courses_bp
+from routes.admin_interview_prep import admin_interview_prep_bp
 from routes.answerer import answerer_bp
 from routes.master_data import master_data_bp, public_bp
 from routes.offer_letter import offer_letter_bp
@@ -31,6 +32,7 @@ def create_app() -> Flask:
     app.register_blueprint(admin_dashboard_bp, url_prefix="/admin")
     app.register_blueprint(admin_results_bp, url_prefix="/admin/results")
     app.register_blueprint(admin_courses_bp, url_prefix="/admin/courses")
+    app.register_blueprint(admin_interview_prep_bp, url_prefix="/admin/interview-prep")
     app.register_blueprint(answerer_bp, url_prefix="/answerer")
     app.register_blueprint(master_data_bp, url_prefix="/admin/master-data")
     app.register_blueprint(public_bp,      url_prefix="/public")
