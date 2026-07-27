@@ -1,10 +1,11 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 from datetime import datetime
 from bson import ObjectId
 
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
+from services.question_parser import parse_questions_file
 
 admin_exams_bp = Blueprint("admin_exams", __name__)
 
@@ -37,6 +38,11 @@ def list_exams():
     for e in exams:
         exam_key = str(e["_id"])
         summary = assignment_summary.get(exam_key, {"userIds": set(), "colleges": set()})
+        created_at = e.get("createdAt")
+        updated_at = e.get("updatedAt")
+        created_str = created_at.isoformat() if hasattr(created_at, "isoformat") else (str(created_at) if created_at else None)
+        updated_str = updated_at.isoformat() if hasattr(updated_at, "isoformat") else (str(updated_at) if updated_at else None)
+
         out.append({
             "id": exam_key,
             "name": e.get("name"),
@@ -44,12 +50,13 @@ def list_exams():
             "questions": int(e.get("questionCount", 0)),
             "sections": e.get("sections", []),
             "passingPercentage": int(e.get("passingPercentage", 40)),
-            "createdAt": e.get("createdAt").isoformat() if e.get("createdAt") else None,
-            "updatedAt": e.get("updatedAt").isoformat() if e.get("updatedAt") else None,
+            "createdAt": created_str,
+            "updatedAt": updated_str,
             "status": e.get("status", "draft"),
             "assignmentCount": len(summary["userIds"]),
             "assignedColleges": sorted(summary["colleges"]),
         })
+
     out.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
     return jsonify({"tests": to_jsonable(out)})
 
@@ -329,3 +336,80 @@ def assign_exam(exam_id: str):
         upserts += 1
 
     return jsonify({"message": "Assigned", "assigned": upserts})
+
+
+@admin_exams_bp.route("/parse-questions", methods=["POST"])
+@admin_exams_bp.route("/parse-questions/", methods=["POST"])
+def parse_questions_route():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    uploaded_file = request.files["file"]
+    filename = uploaded_file.filename or "uploaded.txt"
+    file_bytes = uploaded_file.read()
+
+    if not file_bytes:
+        return jsonify({"error": "Uploaded file is empty"}), 400
+
+    try:
+        questions, sections = parse_questions_file(file_bytes, filename)
+        return jsonify({
+            "questions": questions,
+            "sections": sections,
+            "filename": filename,
+            "totalParsed": len(questions)
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to parse file: {str(e)}"}), 500
+
+
+@admin_exams_bp.route("/sample-template/<fmt>", methods=["GET"])
+@admin_exams_bp.route("/sample-template/<fmt>/", methods=["GET"])
+def download_sample_template(fmt: str):
+    fmt = fmt.lower()
+    if fmt == "csv":
+        content = (
+            "Question,Option A,Option B,Option C,Option D,Correct Answer,Section,Marks,Type\n"
+            "What is Python?,A programming language,A snake,A database,An operating system,A programming language,General,1,mcq\n"
+            "Which of the following are prime numbers?,2,4,3,6,A, C,Mathematics,2,multiple\n"
+            "Define Object Oriented Programming.,,,,OOP is a programming paradigm based on objects.,General,5,text\n"
+        )
+        return Response(content, mimetype="text/csv", headers={"Content-Disposition": "attachment;filename=sample_questions.csv"})
+    elif fmt == "json":
+        sample_json = [
+            {
+                "question": "What is Python?",
+                "options": ["A programming language", "A snake", "A database", "An operating system"],
+                "correctAnswer": "A programming language",
+                "type": "mcq",
+                "section": "General",
+                "marks": 1
+            },
+            {
+                "question": "Which of the following are prime numbers?",
+                "options": ["2", "4", "3", "6"],
+                "correctAnswer": ["2", "3"],
+                "type": "multiple",
+                "section": "Mathematics",
+                "marks": 2
+            }
+        ]
+        return Response(json.dumps(sample_json, indent=2), mimetype="application/json", headers={"Content-Disposition": "attachment;filename=sample_questions.json"})
+    else:
+        content = (
+            "[Section: General]\n\n"
+            "Q1. What is Python? [1 mark]\n"
+            "A) A programming language\n"
+            "B) A snake\n"
+            "C) A database\n"
+            "D) An operating system\n"
+            "Answer: A\n\n"
+            "[Section: Mathematics]\n\n"
+            "Q2. Which of the following are prime numbers? [2 marks]\n"
+            "A) 2\n"
+            "B) 4\n"
+            "C) 3\n"
+            "D) 6\n"
+            "Answer: A, C\n"
+        )
+        return Response(content, mimetype="text/plain", headers={"Content-Disposition": "attachment;filename=sample_questions.txt"})
