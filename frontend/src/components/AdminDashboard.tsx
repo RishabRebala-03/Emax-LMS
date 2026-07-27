@@ -6,12 +6,13 @@ import TestList from './TestList';
 import TestResults from './TestResults';
 import DataMaintenance from './DataMaintenance';
 import CourseManagement from './CourseManagement';
+import AdminInterviewPrep from './AdminInterviewPrep';
 import './AdminDashboard.css';
 import { apiGet, apiPost } from '../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AppIcon from './AppIcons';
 
-type AdminView = 'dashboard' | 'users' | 'create-test' | 'edit-test' | 'tests' | 'results' | 'data-maintenance' | 'courses';
+type AdminView = 'dashboard' | 'users' | 'create-test' | 'edit-test' | 'tests' | 'results' | 'data-maintenance' | 'courses' | 'interview-prep';
 
 const viewToPath: Record<AdminView, string> = {
   'dashboard':        '/admin',
@@ -22,6 +23,7 @@ const viewToPath: Record<AdminView, string> = {
   'results':          '/admin/results',
   'data-maintenance': '/admin/data-maintenance',
   'courses':          '/admin/courses',
+  'interview-prep':   '/admin/interview-prep',
 };
 
 const pathToView: Record<string, AdminView> = {
@@ -33,6 +35,7 @@ const pathToView: Record<string, AdminView> = {
   '/admin/results':           'results',
   '/admin/data-maintenance':  'data-maintenance',
   '/admin/courses':           'courses',
+  '/admin/interview-prep':    'interview-prep',
 };
 
 interface AdminDashboardProps {
@@ -121,6 +124,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
         return <DataMaintenance />;
       case 'courses':
         return <CourseManagement />;
+      case 'interview-prep':
+        return <AdminInterviewPrep />;
       default:
         return (
           <>
@@ -219,6 +224,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
           >
             <AppIcon name="courses" className="nav-icon" />
             Courses
+          </button>
+          <button
+            className={`nav-item ${currentView === 'interview-prep' ? 'active' : ''}`}
+            onClick={() => setCurrentView('interview-prep')}
+          >
+            <AppIcon name="interview" className="nav-icon" />
+            Interview Prep
           </button>
           <button
             className={`nav-item ${currentView === 'data-maintenance' ? 'active' : ''}`}

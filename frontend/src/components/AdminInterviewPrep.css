@@ -1,0 +1,660 @@
+/* ─────────────────────────────────────────────
+   Admin — Interview Preparation Access Manager
+───────────────────────────────────────────── */
+
+/* ── Page shell ── */
+.aip-page {
+  padding: 0 2rem 3rem;
+  max-width: 1050px;
+  margin: 0 auto;
+  font-family: '72', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Page header ── */
+.aip-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem 0 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 1.75rem;
+}
+
+.aip-page-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #1d2d3e;
+  margin: 0 0 0.35rem;
+}
+
+.aip-page-subtitle {
+  font-size: 0.875rem;
+  color: #6a6d70;
+  margin: 0;
+  max-width: 560px;
+  line-height: 1.5;
+}
+
+.aip-total-badge {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  background: #ebf5ff;
+  color: #0070f2;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border-radius: 100px;
+  white-space: nowrap;
+  margin-top: 0.25rem;
+}
+
+/* ── Info cards ── */
+.aip-info-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .aip-info-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.aip-info-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+
+.aip-info-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.aip-info-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.aip-info-icon--blue   { background: #ebf5ff; color: #0070f2; }
+.aip-info-icon--purple { background: #f3f0ff; color: #7C3AED; }
+.aip-info-icon--green  { background: #ecfdf5; color: #059669; }
+.aip-info-icon--yellow { background: #fffbeb; color: #D97706; }
+
+.aip-info-label {
+  font-size: 0.75rem;
+  color: #6a6d70;
+  font-weight: 400;
+  margin-bottom: 0.15rem;
+}
+
+.aip-info-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #1d2d3e;
+  line-height: 1;
+}
+
+/* ── Section overview chips ── */
+.aip-sections-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.aip-section-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.aip-section-chip-name {
+  color: #374151;
+}
+
+.aip-section-chip-count {
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* ── Assignment panel ── */
+.aip-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+.aip-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafbfc;
+}
+
+.aip-panel-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.aip-panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1d2d3e;
+  margin: 0;
+}
+
+.aip-panel-meta {
+  font-size: 0.8rem;
+  color: #6a6d70;
+}
+
+.aip-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.aip-filter-toggle:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.aip-filter-toggle.active {
+  border-color: #0070f2;
+  color: #0070f2;
+  background: #ebf5ff;
+}
+
+.aip-filter-toggle-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.aip-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #0070f2;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 50%;
+}
+
+/* ── Filters grid ── */
+.aip-filters-panel {
+  padding: 1.25rem 1.5rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.aip-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .aip-filter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.aip-clear-filters {
+  margin-top: 0.85rem;
+  padding: 0.4rem 1rem;
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.aip-clear-filters:hover {
+  border-color: #9ca3af;
+  color: #374151;
+  background: #f9fafb;
+}
+
+/* ── Selection bar ── */
+.aip-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafbfc;
+}
+
+.aip-selection-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.aip-selection-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.aip-select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── Checkbox ── */
+.aip-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #0070f2;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Change pills ── */
+.aip-change-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.aip-change-pill--add {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.aip-change-pill--remove {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* ── Student list ── */
+.aip-student-list {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.aip-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* ── Student row ── */
+.aip-student-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.aip-student-row:last-child {
+  border-bottom: none;
+}
+
+.aip-student-row:hover {
+  background: #f9fafb;
+}
+
+.aip-student-row--assigned {
+  background: #f0fdf4;
+}
+
+.aip-student-row--assigned:hover {
+  background: #dcfce7;
+}
+
+.aip-student-row--adding {
+  background: #eff6ff;
+}
+
+.aip-student-row--adding:hover {
+  background: #dbeafe;
+}
+
+.aip-student-row--removing {
+  background: #fef2f2;
+}
+
+.aip-student-row--removing:hover {
+  background: #fee2e2;
+}
+
+/* Avatar */
+.aip-student-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0070f2, #8B5CF6);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Info block */
+.aip-student-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.aip-student-name {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1d2d3e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aip-student-meta {
+  display: block;
+  font-size: 0.78rem;
+  color: #6a6d70;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Badges */
+.aip-student-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.aip-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 100px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.aip-badge--assigned {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.aip-badge--add {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.aip-badge--remove {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.aip-badge--inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* ── Save footer ── */
+.aip-save-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbfc;
+}
+
+.aip-save-btn {
+  padding: 0.65rem 1.75rem;
+  background: #0070f2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.aip-save-btn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.aip-save-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.aip-save-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.aip-discard-btn {
+  padding: 0.65rem 1.25rem;
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.aip-discard-btn:hover:not(:disabled) {
+  border-color: #9ca3af;
+  color: #374151;
+  background: #f9fafb;
+}
+
+.aip-discard-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Spinner ── */
+.aip-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #0070f2;
+  border-radius: 50%;
+  animation: aip-spin 0.7s linear infinite;
+}
+
+@keyframes aip-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .aip-page {
+    padding: 0 1rem 2.5rem;
+  }
+
+  .aip-page-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .aip-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .aip-student-row {
+    padding: 0.75rem 1rem;
+  }
+
+  .aip-save-footer {
+    flex-direction: column;
+  }
+
+  .aip-save-btn,
+  .aip-discard-btn {
+    width: 100%;
+  }
+}
+
+/* ── Toast notifications ── */
+.aip-toast-stack {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.aip-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 300px;
+  max-width: 420px;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08);
+  pointer-events: all;
+  animation: aip-toast-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  font-family: '72', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+@keyframes aip-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.aip-toast--success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #14532d;
+}
+
+.aip-toast--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+}
+
+.aip-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.aip-toast-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.aip-toast--success .aip-toast-icon { color: #15803d; }
+.aip-toast--error   .aip-toast-icon { color: #dc2626; }
+
+.aip-toast-message {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.aip-toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.5;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.aip-toast-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.aip-toast-close svg {
+  width: 14px;
+  height: 14px;
+}

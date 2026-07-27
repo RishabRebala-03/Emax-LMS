@@ -1,27 +1,30 @@
 import React, { useEffect, useMemo, useState } from "react";
 import TestInterface from "./TestInterface";
 import StudentCourses from "./StudentCourses";
+import InterviewPrep from "./InterviewPrep";
 import "./AnswererDashboard.css";
 import { apiGet, apiPost } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import AppIcon from "./AppIcons";
 
-type AnswererView = "dashboard" | "tests" | "history" | "courses" | "account-security";
+type AnswererView = "dashboard" | "tests" | "history" | "courses" | "account-security" | "interview-prep";
 
 const viewToPath: Record<AnswererView, string> = {
   'dashboard': '/dashboard',
-  'tests':     '/dashboard/tests',
-  'history':   '/dashboard/history',
-  'courses':   '/dashboard/courses',
+  'tests': '/dashboard/tests',
+  'history': '/dashboard/history',
+  'courses': '/dashboard/courses',
   'account-security': '/dashboard/account-security',
+  'interview-prep': '/dashboard/interview-prep',
 };
 
 const pathToView: Record<string, AnswererView> = {
-  '/dashboard':         'dashboard',
-  '/dashboard/tests':   'tests',
+  '/dashboard': 'dashboard',
+  '/dashboard/tests': 'tests',
   '/dashboard/history': 'history',
   '/dashboard/courses': 'courses',
   '/dashboard/account-security': 'account-security',
+  '/dashboard/interview-prep': 'interview-prep',
 };
 
 interface Props {
@@ -85,10 +88,10 @@ type SapSystem = "SHD" | "EMQ" | "EMP" | "EMD"; // Add more SAP systems as neede
 const SAP_SYSTEMS: SapSystem[] = ["SHD", "EMQ", "EMP", "EMD"];
 
 const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
-const navigate = useNavigate();
-const location = useLocation();
-const activeView: AnswererView = pathToView[location.pathname] ?? 'dashboard';
-const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const activeView: AnswererView = pathToView[location.pathname] ?? 'dashboard';
+  const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
 
   const [insights, setInsights] = useState<Insights>({
     testsTaken: 0,
@@ -125,7 +128,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
-
+  const [hasInterviewPrepAccess, setHasInterviewPrepAccess] = useState(false);
 
   const today = useMemo(
     () =>
@@ -193,14 +196,34 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
     }
   };
 
+  const loadInterviewPrepAccess = async () => {
+    try {
+      const res = await apiGet<{ hasAccess: boolean }>(
+        `/answerer/interview-prep/access?userId=${encodeURIComponent(userName)}`
+      );
+      setHasInterviewPrepAccess(res.hasAccess === true);
+    } catch (e) {
+      console.error(e);
+      setHasInterviewPrepAccess(false);
+    }
+  };
+
   useEffect(() => {
     loadInsights();
     loadAssignedTests();
     loadTestHistory();
+    loadInterviewPrepAccess();
     if (activeView === "account-security") {
       loadAccountSecurity();
     }
   }, [userName]);
+
+  // Redirect away from interview-prep if access was revoked
+  useEffect(() => {
+    if (activeView === "interview-prep" && !hasInterviewPrepAccess) {
+      navigate('/dashboard');
+    }
+  }, [activeView, hasInterviewPrepAccess]);
 
   useEffect(() => {
     if (activeView === "account-security") {
@@ -418,7 +441,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               Dashboard
             </button>
 
-            <button 
+            <button
               className={`nav-item ${activeView === "tests" ? "active" : ""}`}
               onClick={() => setActiveView("tests")}
             >
@@ -426,7 +449,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               Tests
             </button>
 
-            <button 
+            <button
               className={`nav-item ${activeView === "courses" ? "active" : ""}`}
               onClick={() => setActiveView("courses")}
             >
@@ -434,7 +457,7 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               Courses
             </button>
 
-            <button 
+            <button
               className={`nav-item ${activeView === "history" ? "active" : ""}`}
               onClick={() => setActiveView("history")}
             >
@@ -442,13 +465,23 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               History
             </button>
 
-            <button 
+            <button
               className={`nav-item ${activeView === "account-security" ? "active" : ""}`}
               onClick={() => setActiveView("account-security")}
             >
               <AppIcon name="security" className="nav-icon" />
-              SAP account security
+              SAP Account Security
             </button>
+
+            {hasInterviewPrepAccess && (
+              <button
+                className={`nav-item ${activeView === "interview-prep" ? "active" : ""}`}
+                onClick={() => setActiveView("interview-prep")}
+              >
+                <AppIcon name="interview" className="nav-icon" />
+                Interview Preparation
+              </button>
+            )}
           </nav>
 
           <div className="sidebar-footer">
@@ -547,8 +580,8 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                     <p>You have {assignedTests.length} test{assignedTests.length !== 1 ? 's' : ''} assigned. Start your next challenge and improve your skills.</p>
                   </div>
                   <div className="qa-right">
-                    <button 
-                      className="primary-btn large" 
+                    <button
+                      className="primary-btn large"
                       onClick={() => setActiveView("tests")}
                       disabled={assignedTests.length === 0}
                     >
@@ -587,16 +620,16 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
                     .filter(t => !t.attempted)
                     .slice(0, 3)
                     .map((test) => (
-                    <div key={test.id} className="test-row">
-                      <div>
-                        <div className="test-name">{test.name}</div>
-                        <div className="test-meta">{test.questions} questions · {test.duration} min</div>
+                      <div key={test.id} className="test-row">
+                        <div>
+                          <div className="test-name">{test.name}</div>
+                          <div className="test-meta">{test.questions} questions · {test.duration} min</div>
+                        </div>
+                        <span className={`status ${test.status === 'active' ? 'upcoming' : 'locked'}`}>
+                          {test.status}
+                        </span>
                       </div>
-                      <span className={`status ${test.status === 'active' ? 'upcoming' : 'locked'}`}>
-                        {test.status}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             </div>
@@ -681,11 +714,24 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
           </>
         )}
 
+        {activeView === "interview-prep" && (
+          <>
+            <div className="dashboard-topbar">
+              <div className="dashboard-topbar-left">
+                <span className="dashboard-title">Interview Preparation</span>
+              </div>
+              <div className="dashboard-topbar-right">{today}</div>
+            </div>
+
+            <InterviewPrep />
+          </>
+        )}
+
         {activeView === "account-security" && (
           <>
             <div className="dashboard-topbar">
               <div className="dashboard-topbar-left">
-                <span className="dashboard-title">SAP account security</span>
+                <span className="dashboard-title">SAP Account Security</span>
               </div>
               <div className="dashboard-topbar-right">{today}</div>
             </div>
@@ -694,25 +740,25 @@ const setActiveView = (view: AnswererView) => navigate(viewToPath[view]);
               <div className="security-hero card-surface">
                 <div className="security-hero-copy">
                   <span className="security-kicker">Student only</span>
-                  <h2>Unlock your SAP account user with a verified code</h2>
+                  <h2>Unlock your SAP Account user with a verified code</h2>
                   <p>
-                    Request a one-time passcode to your college email, then enter it here to restore access to your SAP account user.
+                    Request a one-time passcode to your college email, then enter it here to restore access to your SAP Account user.
                   </p>
                 </div>
                 <div className="security-hero-meta">
                   <div className="security-status-pill">
                     <AppIcon name="security" className="security-status-icon" />
-                    {accountSecurity?.isActive ? "SAP account user active" : "SAP account user locked"}
+                    {accountSecurity?.isActive ? "SAP Account user active" : "SAP Account user locked"}
                   </div>
                   <p className="security-note">
-                    This flow is available only for the signed-in SAP account user.
+                    This flow is available only for the signed-in SAP Account user.
                   </p>
                 </div>
               </div>
 
               <div className="security-grid">
                 <section className="security-panel card-surface">
-                  <h3>SAP account unlock</h3>
+                  <h3>SAP Account unlock</h3>
                   <p className="security-muted">
                     Step 1: send a verification code to your college email.
                   </p>
