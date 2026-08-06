@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import './TestBuilder.css';
 import { apiPost } from "../services/api";
 import DocumentUploadModal, { ParsedQuestion } from './DocumentUploadModal';
+import { renderQuestionHtml } from '../utils/renderQuestionHtml';
 
 interface Question {
   id: string;
@@ -647,7 +648,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                         </button>
                         <button className="delete-icon" onClick={() => deleteQuestion(q.id)} style={{ marginLeft: '0.4rem' }}>✕</button>
                       </div>
-                      <p className="question-text prewrap">{q.question}</p>
+                      <p className="question-text prewrap">{renderQuestionHtml(q.question)}</p>
                       {q.options && q.options.length > 0 && (
                         <ul className="options-list">
                           {q.options.map((opt, i) => (
@@ -655,7 +656,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                               (Array.isArray(q.correctAnswer) && q.correctAnswer.includes(opt)) ||
                               q.correctAnswer === opt ? 'correct-option' : ''
                             }>
-                              {opt}
+                              {renderQuestionHtml(opt)}
                             </li>
                           ))}
                         </ul>

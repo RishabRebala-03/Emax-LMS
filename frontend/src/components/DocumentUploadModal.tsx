@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import './DocumentUploadModal.css';
 import { API_BASE, apiPostForm } from '../services/api';
+import { renderQuestionHtml } from '../utils/renderQuestionHtml';
 
 export interface ParsedQuestion {
   id: string;
@@ -30,6 +31,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   const [parsedSections, setParsedSections] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [overrideSection, setOverrideSection] = useState<string>('');
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,6 +119,17 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   const mcqCount = parsedQuestions.filter(q => q.type === 'mcq').length;
   const multiCount = parsedQuestions.filter(q => q.type === 'multiple').length;
   const textCount = parsedQuestions.filter(q => q.type === 'text').length;
+  const imgCount = parsedQuestions.filter(q => q.question?.includes('<img')).length;
+
+  // Per-section breakdown
+  const sectionCounts: Record<string, number> = {};
+  parsedQuestions.forEach(q => {
+    const sec = q.section || 'General';
+    sectionCounts[sec] = (sectionCounts[sec] || 0) + 1;
+  });
+
+  const previewLimit = 5;
+  const visibleQuestions = showAllQuestions ? parsedQuestions : parsedQuestions.slice(0, previewLimit);
 
   return (
     <div className="doc-upload-overlay" onClick={onClose}>
@@ -210,7 +223,17 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 <span className="summary-chip mcq">Single Choice (MCQ): {mcqCount}</span>
                 <span className="summary-chip multi">Multiple Correct: {multiCount}</span>
                 <span className="summary-chip text">Text Answer: {textCount}</span>
+                {imgCount > 0 && <span className="summary-chip img">📷 With Images: {imgCount}</span>}
               </div>
+
+              {Object.keys(sectionCounts).length > 1 && (
+                <div className="section-breakdown">
+                  <span className="breakdown-label">Per Section:</span>
+                  {Object.entries(sectionCounts).map(([sec, count]) => (
+                    <span key={sec} className="summary-chip section">{sec}: {count}</span>
+                  ))}
+                </div>
+              )}
 
               <div className="section-assign-row">
                 <label>Target Section for Imported Questions:</label>
@@ -227,14 +250,15 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
               <div className="parsed-preview-list">
                 <h4>Parsed Questions Preview</h4>
-                {parsedQuestions.slice(0, 5).map((q, i) => (
+                {visibleQuestions.map((q, i) => (
                   <div key={i} className="parsed-preview-item">
                     <div className="preview-header">
-                      <span className="preview-qnum">Q{i + 1}</span>
+                      <span className="preview-qnum">Q{(showAllQuestions ? i : i) + 1}</span>
                       <span className="preview-type">{q.type.toUpperCase()}</span>
+                      <span className="preview-marks">{q.marks || 1}m</span>
                       <span className="preview-sec">{overrideSection || q.section}</span>
                     </div>
-                    <p className="preview-text">{q.question}</p>
+                    <p className="preview-text">{renderQuestionHtml(q.question)}</p>
                     {q.options && q.options.length > 0 && (
                       <div className="preview-options">
                         {q.options.map((opt, idx) => {
@@ -243,7 +267,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                             : q.correctAnswer === opt;
                           return (
                             <span key={idx} className={`preview-opt ${isCorrect ? 'correct' : ''}`}>
-                              {isCorrect ? '✓ ' : ''}{opt}
+                              {isCorrect ? '✓ ' : ''}{renderQuestionHtml(opt)}
                             </span>
                           );
                         })}
@@ -251,8 +275,16 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                     )}
                   </div>
                 ))}
-                {parsedQuestions.length > 5 && (
-                  <p className="preview-more-count">+ {parsedQuestions.length - 5} more questions ready to import</p>
+                {parsedQuestions.length > previewLimit && (
+                  <button
+                    type="button"
+                    className="toggle-preview-btn"
+                    onClick={() => setShowAllQuestions(!showAllQuestions)}
+                  >
+                    {showAllQuestions
+                      ? '▲ Show Less'
+                      : `▼ Show All ${parsedQuestions.length} Questions`}
+                  </button>
                 )}
               </div>
             </div>

@@ -116,3 +116,42 @@
   min-width: 20px;
   color: #555;
 }
+
+/* --- Inline images from parsed documents --- */
+.question-text img,
+.option-text img,
+.q-inline-img {
+  max-width: 400px;
+  max-height: 350px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 8px 0;
+  border-radius: 4px;
+}
+
+/* --- Inline tables from parsed documents --- */
+.question-text table,
+.q-inline-table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.875rem;
+  width: auto;
+  max-width: 100%;
+}
+
+.question-text table th,
+.question-text table td,
+.q-inline-table th,
+.q-inline-table td {
+  border: 1px solid #d9d9d9;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.question-text table th,
+.q-inline-table th {
+  background: #f0f4f8;
+  font-weight: 600;
+}

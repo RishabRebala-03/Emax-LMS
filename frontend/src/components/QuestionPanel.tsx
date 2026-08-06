@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './QuestionPanel.css';
+import { renderQuestionHtml } from '../utils/renderQuestionHtml';
 
 interface Question {
   id: string;
@@ -83,7 +84,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
     <div className="question-panel">
       <div className="question-header">
         <span className="question-number">{questionNumber}.</span>
-        <p className="question-text prewrap">{question.question}</p>
+        <p className="question-text prewrap">{renderQuestionHtml(question.question)}</p>
       </div>
 
       {question.options && question.type !== 'ordering' && question.type !== 'text' && !isMultipleChoice && (
@@ -98,7 +99,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
                 onChange={() => handleOptionClick(option)}
                 className="option-radio"
               />
-              <span className="option-text">{option}</span>
+              <span className="option-text">{renderQuestionHtml(option)}</span>
             </label>
           ))}
         </div>
@@ -120,7 +121,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
                     onChange={() => handleOptionClick(option)}
                     className="option-checkbox"
                   />
-                  <span className="option-text">{option}</span>
+                  <span className="option-text">{renderQuestionHtml(option)}</span>
                 </label>
               );
             })}

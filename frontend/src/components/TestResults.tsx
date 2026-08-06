@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './TestResults.css';
 import { apiGet } from '../services/api';
+import { renderQuestionHtml } from '../utils/renderQuestionHtml';
 import {
   filterResultTests,
   filterTestResults,
@@ -960,7 +961,7 @@ const TestResults: React.FC = () => {
                     <span className="question-marks">{review.marks} marks</span>
                   </div>
 
-                  <p className="question-text">{question?.question || 'Question'}</p>
+                  <p className="question-text">{renderQuestionHtml(question?.question || 'Question')}</p>
 
                   <div className="question-answers">
                     <div className="answer-row">
