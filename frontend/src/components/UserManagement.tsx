@@ -178,6 +178,84 @@ interface ColDef {
   render?: (u: User) => React.ReactNode;
 }
 
+// ─── Document Helpers & Renderer ─────────────────────────────────────────────
+
+function getDocDetails(u: User) {
+  const url = u.documentUrl || "";
+  const rawFileName = u.documentName || url.split("/").pop() || "Document";
+  const cleanName = u.documentName
+    ? u.documentName
+    : rawFileName.replace(/^[A-Za-z0-9]+_\d+_\d+_/, "").replace(/^\d+_/, "");
+
+  const extMatch = cleanName.match(/\.([a-zA-Z0-9]+)$/) || url.match(/\.([a-zA-Z0-9]+)$/);
+  const ext = extMatch ? extMatch[1].toUpperCase() : "DOC";
+
+  let icon = "📄";
+  if (["PNG", "JPG", "JPEG", "GIF", "WEBP", "SVG"].includes(ext)) {
+    icon = "🖼️";
+  } else if (["XLS", "XLSX", "CSV"].includes(ext)) {
+    icon = "📊";
+  } else if (["DOC", "DOCX", "TXT"].includes(ext)) {
+    icon = "📝";
+  } else if (["ZIP", "RAR", "7Z"].includes(ext)) {
+    icon = "📦";
+  }
+
+  return { name: cleanName, format: ext, icon };
+}
+
+const downloadDocumentFile = async (e: React.MouseEvent, url: string, fileName: string) => {
+  e.preventDefault();
+  e.stopPropagation();
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Download network request failed");
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error("Blob download failed, fallback to direct anchor click:", err);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+};
+
+const DocumentDownloadButton: React.FC<{ user: User }> = ({ user }) => {
+  if (!user.documentUrl) return <span style={{ color: "#9ca3af" }}>—</span>;
+
+  const fullUrl = `${API_BASE}${user.documentUrl}`;
+  const { name, format, icon } = getDocDetails(user);
+
+  return (
+    <button
+      type="button"
+      className="doc-download-btn"
+      onClick={(e) => downloadDocumentFile(e, fullUrl, name)}
+      title={`Click to download ${name} (${format})`}
+    >
+      <span className="doc-type-icon">{icon}</span>
+      <span className="doc-name" title={name}>{name}</span>
+      <span className="doc-format-badge">{format}</span>
+      <span className="doc-arrow-icon" aria-label="Download document">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 5v14M19 12l-7 7-7-7" />
+        </svg>
+      </span>
+    </button>
+  );
+};
+
 // ─── Column definitions ───────────────────────────────────────────────────────
 
 const ALL_COLS: ColDef[] = [
@@ -199,35 +277,7 @@ const ALL_COLS: ColDef[] = [
     key: "documentUrl",
     label: "Document",
     sortable: false,
-    render: (u) => {
-      if (!u.documentUrl) return <span style={{ color: "#9ca3af" }}>—</span>;
-      const fullUrl = `${API_BASE}${u.documentUrl}`;
-      const isPdf = u.documentUrl.toLowerCase().endsWith(".pdf");
-      return (
-        <a
-          href={fullUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.3rem",
-            color: "#0070f2",
-            fontWeight: 600,
-            fontSize: "0.8125rem",
-            textDecoration: "none",
-            padding: "0.2rem 0.5rem",
-            borderRadius: "0.25rem",
-            background: "#ebf5ff",
-            border: "1px solid #b3d4fb",
-            whiteSpace: "nowrap",
-          }}
-          title="View / Download Document"
-        >
-          <span>{isPdf ? "📄" : "🖼️"} View Doc</span>
-        </a>
-      );
-    },
+    render: (u) => <DocumentDownloadButton user={u} />,
   },
   {
     key: "isActive", label: "Status", sortable: true,
@@ -545,9 +595,7 @@ const UserProfile: React.FC<{
     { label: "Last Semester CGPA", value: user.cgpa != null ? user.cgpa.toFixed(2) : "—" },
     { label: "SAP Certification",  value: user.sapCertification || "—" },
     { label: "Uploaded Document",  value: user.documentUrl ? (
-        <a href={`${API_BASE}${user.documentUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: "#0070f2", fontWeight: 600 }}>
-          {user.documentName ? `📄 ${user.documentName}` : "📄 View Uploaded Document"}
-        </a>
+        <DocumentDownloadButton user={user} />
       ) : "—" },
     { label: "Account Status",     value: (
         <span className={`status-pill ${user.isActive ? "active" : "inactive"}`}>
