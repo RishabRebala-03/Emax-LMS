@@ -24,6 +24,9 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
         "cgpa": "cgpa",
         "sapCertification": "sapCertification",
         "collegeName": "collegeName",
+        "dob": "dob",
+        "documentUrl": "documentUrl",
+        "documentName": "documentName",
     }
 
     for reg_key, user_key in field_map.items():

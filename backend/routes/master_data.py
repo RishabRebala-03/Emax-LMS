@@ -6,7 +6,9 @@
 #   Public: GET              /public/next-unid    (preview next NAX_UNID)
 #   Public: POST             /public/register     (student self-registration)
 
-from flask import Blueprint, jsonify, request
+import os
+from flask import Blueprint, jsonify, request, current_app
+from werkzeug.utils import secure_filename
 from datetime import datetime
 from bson import ObjectId
 from config.db import get_db
@@ -16,6 +18,10 @@ master_data_bp = Blueprint("master_data", __name__)
 public_bp = Blueprint("public", __name__)
 
 VALID_CATEGORIES = ("genders", "streams", "certifications", "colleges")
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "pdf"}
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ─────────────────────────────────────────────
 # ADMIN — read all master data
@@ -159,35 +165,78 @@ def get_next_unid():
 @public_bp.post("/register")
 @public_bp.post("/register/")
 def student_register():
-    payload = request.get_json(silent=True) or {}
+    # Support both multipart form data and JSON payload
+    if request.content_type and "multipart/form-data" in request.content_type:
+        data = request.form.to_dict()
+    else:
+        data = request.get_json(silent=True) or {}
 
     required = ["studentName", "studentId", "email", "mobile",
-                "gender", "courseStream", "cgpa", "sapCertification", "collegeName", "collegeEmail"]
-    missing = [f for f in required if not payload.get(f)]
+                "gender", "courseStream", "cgpa", "sapCertification", "collegeName", "collegeEmail", "dob"]
+    missing = [f for f in required if not data.get(f)]
     if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+        return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
 
     db = get_db()
 
     # Duplicate checks against both collections
-    if db.student_registrations.find_one({"email": payload["email"].strip().lower()}):
+    if db.student_registrations.find_one({"email": data["email"].strip().lower()}):
         return jsonify({"error": "An account with this email already exists"}), 409
-    if db.student_registrations.find_one({"studentId": payload["studentId"].strip()}):
+    if db.student_registrations.find_one({"studentId": data["studentId"].strip()}):
         return jsonify({"error": "An account with this Student ID already exists"}), 409
 
-    # Generate sequential NAX_UNID (atomic-safe via a counter collection)
-    counter = db.counters.find_one_and_update(
-        {"_id": "nax_unid"},
-        {"$inc": {"seq": 1}},
-        upsert=True,
-        return_document=True,
-    )
-    seq = counter.get("seq", 1)
-    nax_unid = f"NAX_{str(1500487 + seq)}"
+    # Process uploaded document file (if provided)
+    uploaded_file = request.files.get("document") or request.files.get("file")
+    document_url = None
+    document_name = None
+
+    if uploaded_file and uploaded_file.filename:
+        filename = secure_filename(uploaded_file.filename)
+        if not allowed_file(filename):
+            return jsonify({"error": "Invalid file format. Only JPG, JPEG, and PDF files are allowed."}), 400
+        
+        # Check size (max 10MB)
+        uploaded_file.seek(0, os.SEEK_END)
+        file_length = uploaded_file.tell()
+        uploaded_file.seek(0)
+        if file_length > 10 * 1024 * 1024:
+            return jsonify({"error": "File size exceeds maximum limit of 10MB"}), 400
+
+        # Generate atomic NAX_UNID first so we can name the file with it
+        counter = db.counters.find_one_and_update(
+            {"_id": "nax_unid"},
+            {"$inc": {"seq": 1}},
+            upsert=True,
+            return_document=True,
+        )
+        seq = counter.get("seq", 1)
+        nax_unid = f"NAX_{str(1500487 + seq)}"
+
+        ext = filename.rsplit(".", 1)[1].lower() if "." in filename else "dat"
+        timestamp = int(datetime.utcnow().timestamp())
+        safe_saved_filename = f"{nax_unid}_{timestamp}.{ext}"
+        
+        docs_dir = os.path.join(current_app.root_path, "uploads", "documents")
+        os.makedirs(docs_dir, exist_ok=True)
+        file_path = os.path.join(docs_dir, safe_saved_filename)
+        uploaded_file.save(file_path)
+
+        document_url = f"/uploads/documents/{safe_saved_filename}"
+        document_name = uploaded_file.filename
+    else:
+        # If no file uploaded, generate sequential NAX_UNID
+        counter = db.counters.find_one_and_update(
+            {"_id": "nax_unid"},
+            {"$inc": {"seq": 1}},
+            upsert=True,
+            return_document=True,
+        )
+        seq = counter.get("seq", 1)
+        nax_unid = f"NAX_{str(1500487 + seq)}"
 
     # Validate CGPA
     try:
-        cgpa = float(payload["cgpa"])
+        cgpa = float(data["cgpa"])
         if not (0 <= cgpa <= 10):
             raise ValueError
     except (TypeError, ValueError):
@@ -195,51 +244,62 @@ def student_register():
 
     now = datetime.utcnow()
     default_password = "Welcome@123"
-    student_id = payload["studentId"].strip()
-    student_name = payload["studentName"].strip()
-    email = payload["email"].strip().lower()
-    college_email = payload["collegeEmail"].strip().lower()
+    student_id = data["studentId"].strip()
+    student_name = data["studentName"].strip()
+    email = data["email"].strip().lower()
+    college_email = data["collegeEmail"].strip().lower()
+    dob = data["dob"].strip()
 
-    # 1. Insert into student_registrations (unchanged — keeps audit trail)
+    # 1. Insert into student_registrations
     reg_doc = {
         "naxUnid": nax_unid,
         "studentName": student_name,
         "studentId": student_id,
         "email": email,
         "collegeEmail": college_email,
-        "mobile": str(payload["mobile"]).strip(),
-        "gender": payload["gender"],
-        "courseStream": payload["courseStream"],
+        "mobile": str(data["mobile"]).strip(),
+        "gender": data["gender"],
+        "courseStream": data["courseStream"],
         "cgpa": cgpa,
-        "sapCertification": payload["sapCertification"],
-        "collegeName": payload["collegeName"],
+        "sapCertification": data["sapCertification"],
+        "collegeName": data["collegeName"],
+        "dob": dob,
+        "documentUrl": document_url,
+        "documentName": document_name,
         "status": "pending",
         "createdAt": now,
     }
     db.student_registrations.insert_one(reg_doc)
 
-    # 2. Also insert into users so the person can log in immediately
+    # 2. Insert into users so student can login immediately
     user_doc = {
         "name": student_name,
         "email": email,
-        "userId": nax_unid,           # userId == naxUnid — single source of truth
+        "userId": nax_unid,
         "naxUnid": nax_unid,
         "password": default_password,
         "role": "answerer",
         "createdAt": now,
         "lastLoginAt": None,
         "isActive": True,
-        # Student profile fields
+        # Profile fields
         "studentId": student_id,
-        "collegeRollNumber": student_id,   # roll number = studentId
-        "mobile": str(payload["mobile"]).strip(),
-        "gender": payload["gender"],
-        "courseStream": payload["courseStream"],
+        "collegeRollNumber": student_id,
+        "mobile": str(data["mobile"]).strip(),
+        "gender": data["gender"],
+        "courseStream": data["courseStream"],
         "cgpa": cgpa,
-        "sapCertification": payload["sapCertification"],
-        "collegeName": payload["collegeName"],
+        "sapCertification": data["sapCertification"],
+        "collegeName": data["collegeName"],
         "collegeEmail": college_email,
+        "dob": dob,
+        "documentUrl": document_url,
+        "documentName": document_name,
     }
     db.users.insert_one(user_doc)
 
-    return jsonify({"naxUnid": nax_unid, "message": "Registration successful"}), 201
+    return jsonify({
+        "naxUnid": nax_unid,
+        "documentUrl": document_url,
+        "message": "Registration successful"
+    }), 201

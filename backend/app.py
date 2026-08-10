@@ -1,4 +1,5 @@
-from flask import Flask, jsonify
+import os
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 from config.settings import settings
@@ -17,6 +18,11 @@ from routes.offer_letter import offer_letter_bp
 def create_app() -> Flask:
     app = Flask(__name__)
 
+    # Ensure uploads directories exist
+    uploads_dir = os.path.join(app.root_path, "uploads")
+    docs_dir = os.path.join(uploads_dir, "documents")
+    os.makedirs(docs_dir, exist_ok=True)
+
     # CORS (comma-separated)
     origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
     CORS(app, resources={r"/*": {"origins": origins}}, supports_credentials=True)
@@ -24,6 +30,10 @@ def create_app() -> Flask:
     @app.get("/")
     def health():
         return jsonify({"status": "ok", "service": "exam-portal-backend"})
+
+    @app.get("/uploads/<path:filename>")
+    def serve_uploads(filename):
+        return send_from_directory(uploads_dir, filename)
 
     # Blueprints
     app.register_blueprint(auth_bp, url_prefix="/auth")

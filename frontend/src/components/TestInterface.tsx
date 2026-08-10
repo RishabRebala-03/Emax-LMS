@@ -237,6 +237,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
         testName={testName}
         questionCount={questions.length}
         duration={duration}
+        passingPercentage={passingPercentage || 60}
         onContinue={() => setTestStep("instructions")}
         onBack={onExit}
       />

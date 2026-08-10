@@ -335,6 +335,31 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     testSortBy !== "newest",
   ].filter(Boolean).length;
 
+  const resetAllFilters = () => {
+    setTestSearch("");
+    setTestStatusFilter("");
+    setTestDurationFilter("all");
+    setTestSectionFilter("all");
+    setTestQuestionFilter("all");
+    setTestCutoffBand("all");
+    setTestSectionCountFilter("all");
+    setTestAssignmentFilter("all");
+    setTestCollegeFilter("all");
+    setCreatedRangeFilter("all");
+    setUpdatedRangeFilter("all");
+    setMinCutoff("");
+    setMaxCutoff("");
+    setMinDuration("");
+    setMaxDuration("");
+    setMinQuestions("");
+    setMaxQuestions("");
+    setMinAssignments("");
+    setMaxAssignments("");
+    setCreatedFrom("");
+    setCreatedTo("");
+    setTestSortBy("newest");
+  };
+
   return (
     <div className="test-list" style={{ paddingTop: "2rem" }}>
       <div className="page-header">
@@ -359,6 +384,11 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
               <h3>Filter Tests</h3>
               <p>Refine the list only when you need it.</p>
             </div>
+            {activeFilterCount > 0 && (
+              <button className="clear-filters-btn" onClick={resetAllFilters}>
+                ✕ Clear All Filters ({activeFilterCount})
+              </button>
+            )}
           </div>
 
           <div className="test-list-filters">
@@ -417,6 +447,22 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
               <span>Created To</span>
               <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
             </label>
+          </div>
+
+          <div className="filters-panel-footer">
+            <span className="filters-count-info">{filteredTests.length} of {tests.length} tests shown</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              {activeFilterCount > 0 && (
+                <span className="filters-active-badge">{activeFilterCount} active filters</span>
+              )}
+              <button
+                className="clear-filters-btn-secondary"
+                onClick={resetAllFilters}
+                disabled={activeFilterCount === 0}
+              >
+                Reset All Filters
+              </button>
+            </div>
           </div>
         </section>
       )}

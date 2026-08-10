@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import "./InterviewPreparation.css";
 
 type PrepPage = {
+  kind?: string;
   topic: string;
   question: string;
   answer: string;

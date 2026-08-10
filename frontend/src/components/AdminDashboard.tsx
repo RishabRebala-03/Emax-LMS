@@ -64,6 +64,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
   const today = new Date().toLocaleDateString("en-US", {
@@ -267,29 +270,62 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
 
             <div className="form-group">
               <label>Current Password</label>
-              <input
-                type="password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showOldPassword ? "text" : "password"}
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  style={{ paddingRight: "2.25rem", width: "100%", boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOldPassword(!showOldPassword)}
+                  style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
+                  title={showOldPassword ? "Hide password" : "Show password"}
+                >
+                  {showOldPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">
               <label>New Password</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  style={{ paddingRight: "2.25rem", width: "100%", boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
+                  title={showNewPassword ? "Hide password" : "Show password"}
+                >
+                  {showNewPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">
               <label>Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ paddingRight: "2.25rem", width: "100%", boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
+                  title={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
 
             <div className="modal-actions">

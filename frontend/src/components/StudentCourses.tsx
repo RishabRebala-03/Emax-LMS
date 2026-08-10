@@ -19,7 +19,7 @@ interface Props {
   userId: string;
 }
 
-export function LessonBlockView({ block }: { block: LessonBlock }) {
+export function LessonBlockView({ block }: { block: any }) {
   switch (block.type) {
     case "paragraph":
       return <p>{renderRichText(block.text)}</p>;
@@ -28,7 +28,7 @@ export function LessonBlockView({ block }: { block: LessonBlock }) {
         <div className="student-lesson-block">
           {block.title && <h5>{block.title}</h5>}
           <ul className="student-lesson-list">
-            {block.items.map((item) => (
+            {block.items.map((item: any) => (
               <li key={item}>{renderRichText(item)}</li>
             ))}
           </ul>
@@ -39,7 +39,7 @@ export function LessonBlockView({ block }: { block: LessonBlock }) {
         <div className="student-lesson-block">
           {block.title && <h5>{block.title}</h5>}
           <div className="student-stat-grid">
-            {block.items.map((item) => (
+            {block.items.map((item: any) => (
               <article key={`${item.label}-${item.value}`} className="student-stat-card">
                 <span className="student-stat-label">{item.label}</span>
                 <strong>{item.value}</strong>
@@ -57,15 +57,15 @@ export function LessonBlockView({ block }: { block: LessonBlock }) {
             <table className="student-lesson-table">
               <thead>
                 <tr>
-                  {block.columns.map((column) => (
+                  {block.columns.map((column: any) => (
                     <th key={column}>{column}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {block.rows.map((row, rowIndex) => (
+                {block.rows.map((row: any, rowIndex: number) => (
                   <tr key={`${row[0]}-${rowIndex}`}>
-                    {row.map((cell, cellIndex) => (
+                    {row.map((cell: any, cellIndex: number) => (
                       <td key={`${cell}-${cellIndex}`}>{renderRichText(cell)}</td>
                     ))}
                   </tr>
@@ -85,7 +85,7 @@ export function LessonBlockView({ block }: { block: LessonBlock }) {
     case "image_grid":
       return (
         <div className="student-image-grid">
-          {block.images.map((image) => (
+          {block.images.map((image: any) => (
             <figure key={`${image.src}-${image.caption || image.alt}`} className="student-lesson-figure grid">
               <img src={image.src} alt={image.alt} />
               {image.caption && <figcaption>{image.caption}</figcaption>}
@@ -105,7 +105,7 @@ export function LessonBlockView({ block }: { block: LessonBlock }) {
         <div className="student-lesson-block">
           {block.title && <h5>{block.title}</h5>}
           <div className="student-pillar-grid">
-            {block.items.map((item) => (
+            {block.items.map((item: any) => (
               <article key={item.title} className="student-pillar-card">
                 <h6>{item.title}</h6>
                 <p>{renderRichText(item.text)}</p>

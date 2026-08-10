@@ -87,6 +87,11 @@ const Icon = {
       <polyline points="6 9 12 15 18 9"/>
     </svg>
   ),
+  EyeOff: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  ),
   FileCsv: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
@@ -150,6 +155,10 @@ interface User {
   naxUnid?: string;
   studentId?: string;
   status?: string;
+  dob?: string;
+  documentUrl?: string;
+  documentName?: string;
+  [key: string]: any;
 }
 
 interface MasterItem { id: string; label: string; }
@@ -180,11 +189,46 @@ const ALL_COLS: ColDef[] = [
   { key: "collegeEmail",      label: "College Email",   sortable: true },
   { key: "mobile",            label: "Mobile",          sortable: true },
   { key: "gender",            label: "Gender",          sortable: true },
+  { key: "dob",               label: "DOB",             sortable: true },
   { key: "collegeName",       label: "College",         sortable: true },
   { key: "collegeRollNumber", label: "Roll No.",        sortable: true },
   { key: "courseStream",      label: "Stream",          sortable: true },
   { key: "cgpa",              label: "CGPA",            sortable: true },
   { key: "sapCertification",  label: "SAP Cert.",       sortable: true },
+  {
+    key: "documentUrl",
+    label: "Document",
+    sortable: false,
+    render: (u) => {
+      if (!u.documentUrl) return <span style={{ color: "#9ca3af" }}>—</span>;
+      const fullUrl = `${API_BASE}${u.documentUrl}`;
+      const isPdf = u.documentUrl.toLowerCase().endsWith(".pdf");
+      return (
+        <a
+          href={fullUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.3rem",
+            color: "#0070f2",
+            fontWeight: 600,
+            fontSize: "0.8125rem",
+            textDecoration: "none",
+            padding: "0.2rem 0.5rem",
+            borderRadius: "0.25rem",
+            background: "#ebf5ff",
+            border: "1px solid #b3d4fb",
+            whiteSpace: "nowrap",
+          }}
+          title="View / Download Document"
+        >
+          <span>{isPdf ? "📄" : "🖼️"} View Doc</span>
+        </a>
+      );
+    },
+  },
   {
     key: "isActive", label: "Status", sortable: true,
     render: (u) => (
@@ -207,10 +251,12 @@ const DEFAULT_COL_KEYS: (keyof User)[] = [
   "email",
   "collegeEmail",
   "mobile",
+  "dob",
   "collegeName",
   "courseStream",
   "cgpa",
   "sapCertification",
+  "documentUrl",
   "isActive",
   "createdAt",
 ];
@@ -229,6 +275,12 @@ function exportCSV(rows: User[], cols: ColDef[]) {
     cols.map(c => {
       if (c.key === "isActive") return r.isActive ? "Active" : "Inactive";
       if (c.key === "createdAt") return new Date(r.createdAt).toLocaleDateString();
+      if (c.key === "documentUrl") {
+        if (!r.documentUrl) return "";
+        const fullUrl = `${API_BASE}${r.documentUrl}`;
+        const label = r.documentName || r.documentUrl.split("/").pop() || "Document";
+        return `"=HYPERLINK(""${fullUrl}"", ""${label.replace(/"/g, '""')}"")"`;
+      }
       return escapeCSV(r[c.key]);
     }).join(",")
   ).join("\n");
@@ -245,10 +297,16 @@ function exportExcel(rows: User[], cols: ColDef[]) {
     `<tr>${cols.map(c => {
       if (c.key === "isActive") return `<td>${r.isActive ? "Active" : "Inactive"}</td>`;
       if (c.key === "createdAt") return `<td>${new Date(r.createdAt).toLocaleDateString()}</td>`;
+      if (c.key === "documentUrl") {
+        if (!r.documentUrl) return `<td>—</td>`;
+        const fullUrl = `${API_BASE}${r.documentUrl}`;
+        const label = r.documentName || r.documentUrl.split("/").pop() || "Document";
+        return `<td xmlns:x="urn:schemas-microsoft-com:office:excel" x:fmla='=HYPERLINK("${fullUrl}", "${label.replace(/'/g, "\\'")}")'><a href="${fullUrl}" target="_blank" style="color:#0070f2; font-weight:600; text-decoration:underline;">${label}</a></td>`;
+      }
       return `<td>${r[c.key] ?? ""}</td>`;
     }).join("")}</tr>`
   ).join("");
-  const html = `<html><head><meta charset="utf-8"/></head><body><table>${header}${body}</table></body></html>`;
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Users</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table>${header}${body}</table></body></html>`;
   const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url;
@@ -433,6 +491,21 @@ const EditUserModal: React.FC<{
             </div>
           </div>
 
+          {/* Row 7 — Date of Birth & Document URL */}
+          <div className="form-row">
+            <div className="form-group">
+              <label>Date of Birth</label>
+              <input type="date" value={formData.dob || ""}
+                onChange={e => set("dob", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Document URL</label>
+              <input type="text" value={formData.documentUrl || ""}
+                onChange={e => set("documentUrl", e.target.value)}
+                placeholder="/uploads/documents/..." />
+            </div>
+          </div>
+
           <div className="modal-footer">
             <button type="button" onClick={onClose} className="um-btn">Cancel</button>
             <button type="submit" className="primary-btn" disabled={saving}>
@@ -465,11 +538,17 @@ const UserProfile: React.FC<{
     { label: "College Email",      value: user.collegeEmail || "—" },
     { label: "Mobile",             value: user.mobile || "—" },
     { label: "Gender",             value: user.gender || "—" },
+    { label: "Date of Birth",      value: user.dob || "—" },
     { label: "College Name",       value: user.collegeName || "—" },
     { label: "College Roll No.",   value: user.collegeRollNumber || "—" },
     { label: "Course Stream",      value: user.courseStream || "—" },
     { label: "Last Semester CGPA", value: user.cgpa != null ? user.cgpa.toFixed(2) : "—" },
     { label: "SAP Certification",  value: user.sapCertification || "—" },
+    { label: "Uploaded Document",  value: user.documentUrl ? (
+        <a href={`${API_BASE}${user.documentUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: "#0070f2", fontWeight: 600 }}>
+          {user.documentName ? `📄 ${user.documentName}` : "📄 View Uploaded Document"}
+        </a>
+      ) : "—" },
     { label: "Account Status",     value: (
         <span className={`status-pill ${user.isActive ? "active" : "inactive"}`}>
           {user.isActive ? "Active" : "Inactive"}
@@ -561,11 +640,13 @@ const UserManagement: React.FC = () => {
   const dragOverRef = useRef<keyof User | null>(null);
 
   // Modals
-  const [showForm, setShowForm]         = useState(false);
-  const [showPwdModal, setShowPwdModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [newPassword, setNewPassword]   = useState("");
-  const [formData, setFormData]         = useState({ name: "", email: "", userId: "", password: "" });
+  const [showForm, setShowForm]                 = useState(false);
+  const [showPwdModal, setShowPwdModal]         = useState(false);
+  const [showPwdModalPassword, setShowPwdModalPassword] = useState(false);
+  const [showCreateUserPassword, setShowCreateUserPassword] = useState(false);
+  const [selectedUser, setSelectedUser]         = useState<User | null>(null);
+  const [newPassword, setNewPassword]           = useState("");
+  const [formData, setFormData]                 = useState({ name: "", email: "", userId: "", password: "" });
 
   // Edit modal
   const [editTarget, setEditTarget] = useState<User | null>(null);
@@ -619,7 +700,7 @@ const UserManagement: React.FC = () => {
       college: fCollege,
       stream: fStream,
       gender: fGender,
-      status: fStatus,
+      status: fStatus as any,
       certification: fCert,
       cgpaMin: fCgpaMin,
       cgpaMax: fCgpaMax,
@@ -753,13 +834,19 @@ const UserManagement: React.FC = () => {
               <form onSubmit={handlePasswordSubmit}>
                 <div className="form-group" style={{ marginBottom: "1.25rem" }}>
                   <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 500, fontSize: "0.8125rem" }}>New Password *</label>
-                  <div className="um-pwd-input-wrap">
+                  <div className="um-pwd-input-wrap" style={{ position: "relative" }}>
                     <span className="um-pwd-icon"><Icon.Lock /></span>
-                    <input type="password" value={newPassword} required minLength={4}
+                    <input type={showPwdModalPassword ? "text" : "password"} value={newPassword} required minLength={4}
                       placeholder="Enter new password" onChange={e => setNewPassword(e.target.value)}
-                      style={{ width: "100%", padding: "0.65rem 0.65rem 0.65rem 2.25rem",
+                      style={{ width: "100%", padding: "0.65rem 2.25rem 0.65rem 2.25rem",
                         border: "1px solid #d1d5db", borderRadius: "0.375rem",
                         fontSize: "0.9rem", fontFamily: "inherit", boxSizing: "border-box" }} />
+                    <button type="button" onClick={() => setShowPwdModalPassword(!showPwdModalPassword)}
+                      style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)",
+                        background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex", padding: "0.2rem" }}
+                      title={showPwdModalPassword ? "Hide password" : "Show password"}>
+                      {showPwdModalPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+                    </button>
                   </div>
                   <small style={{ color: "#9ca3af", fontSize: "0.775rem" }}>Minimum 4 characters</small>
                 </div>
@@ -796,7 +883,7 @@ const UserManagement: React.FC = () => {
         <div className="um-toolbar">
           <div className="um-search-wrap">
             <ValueHelpField
-              label="Search Users"
+              label=""
               placeholder="Search name, email, ID, UNID, mobile..."
               value={search}
               options={userSearchOptions}
@@ -934,8 +1021,17 @@ const UserManagement: React.FC = () => {
               </div>
               <div className="form-group">
                 <label>Password *</label>
-                <input type="password" value={formData.password} placeholder="Enter password" required
-                  onChange={e => setFormData({ ...formData, password: e.target.value })} />
+                <div style={{ position: "relative" }}>
+                  <input type={showCreateUserPassword ? "text" : "password"} value={formData.password} placeholder="Enter password" required
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                    style={{ paddingRight: "2.25rem" }} />
+                  <button type="button" onClick={() => setShowCreateUserPassword(!showCreateUserPassword)}
+                    style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)",
+                      background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex", padding: "0.2rem" }}
+                    title={showCreateUserPassword ? "Hide password" : "Show password"}>
+                    {showCreateUserPassword ? <Icon.EyeOff /> : <Icon.Eye />}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="form-actions">

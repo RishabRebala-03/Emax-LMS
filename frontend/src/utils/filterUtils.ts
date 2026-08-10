@@ -211,8 +211,8 @@ export const filterPortalUsers = <T extends PortalUserLike>(
 
   const next = users.filter((user) => {
     if (filters.search.trim()) {
-      const q = filters.search.trim().toLowerCase();
-      const matches = [
+      const keywords = filters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const haystack = [
         user.name,
         user.email,
         user.userId,
@@ -221,20 +221,31 @@ export const filterPortalUsers = <T extends PortalUserLike>(
         user.collegeEmail,
         user.collegeRollNumber,
         user.studentId,
+        user.collegeName,
+        user.courseStream,
+        user.gender,
+        user.sapCertification,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-      if (!matches) return false;
+        .join(" ")
+        .toLowerCase();
+
+      if (!keywords.every((kw) => haystack.includes(kw))) return false;
     }
 
-    if (filters.college && user.collegeName !== filters.college) return false;
-    if (filters.stream && user.courseStream !== filters.stream) return false;
-    if (filters.gender && user.gender !== filters.gender) return false;
-    if (filters.certification && user.sapCertification !== filters.certification) return false;
+    if (filters.college && filters.college !== "all" && (user.collegeName || "").toLowerCase() !== filters.college.toLowerCase()) return false;
+    if (filters.stream && filters.stream !== "all" && (user.courseStream || "").toLowerCase() !== filters.stream.toLowerCase()) return false;
+    if (filters.gender && filters.gender !== "all" && (user.gender || "").toLowerCase() !== filters.gender.toLowerCase()) return false;
+    if (filters.certification && filters.certification !== "all" && (user.sapCertification || "").toLowerCase() !== filters.certification.toLowerCase()) return false;
     if (filters.status === "active" && !user.isActive) return false;
     if (filters.status === "inactive" && user.isActive) return false;
-    if (minCgpa !== null && (user.cgpa ?? 0) < minCgpa) return false;
-    if (maxCgpa !== null && (user.cgpa ?? 0) > maxCgpa) return false;
+
+    if (minCgpa !== null) {
+      if (user.cgpa === null || user.cgpa === undefined || Number(user.cgpa) < minCgpa) return false;
+    }
+    if (maxCgpa !== null) {
+      if (user.cgpa === null || user.cgpa === undefined || Number(user.cgpa) > maxCgpa) return false;
+    }
 
     const createdAt = parseDateValue(user.createdAt);
     if (fromDate && (!createdAt || createdAt < fromDate)) return false;
@@ -266,19 +277,23 @@ export const filterAssignableStudents = <T extends AssignableStudentLike>(
     const matchesStatus =
       filters.status === "all" ? true : filters.status === "active" ? Boolean(student.isActive) : !student.isActive;
     if (!matchesStatus) return false;
-    if (filters.stream && student.courseStream !== filters.stream) return false;
-    if (filters.college && student.collegeName !== filters.college) return false;
+    if (filters.stream && filters.stream !== "all" && (student.courseStream || "").toLowerCase() !== filters.stream.toLowerCase()) return false;
+    if (filters.college && filters.college !== "all" && (student.collegeName || "").toLowerCase() !== filters.college.toLowerCase()) return false;
 
+    if (!filters.search.trim()) return true;
+    const keywords = filters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const haystack = [student.name, student.userId, student.email, student.courseStream, student.collegeName, student.gender]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    return !filters.search.trim() || haystack.includes(filters.search.trim().toLowerCase());
+    return keywords.every((kw) => haystack.includes(kw));
   });
 
 export const filterMasterItems = <T extends MasterItemLike>(items: T[], query: string) => {
   const normalized = query.trim().toLowerCase();
-  return normalized ? items.filter((item) => item.label.toLowerCase().includes(normalized)) : items;
+  if (!normalized) return items;
+  const keywords = normalized.split(/\s+/).filter(Boolean);
+  return items.filter((item) => keywords.every((kw) => item.label.toLowerCase().includes(kw)));
 };
 
 export const filterAdminTests = <T extends AdminTestLike>(
@@ -342,12 +357,12 @@ export const filterAdminTests = <T extends AdminTestLike>(
 
     if (filters.status && test.status !== filters.status) return false;
     if (!matchesTestDurationBand(test.duration, filters.durationBand)) return false;
-    if (filters.section !== "all" && !sectionNames.includes(filters.section)) return false;
+    if (filters.section && filters.section !== "all" && !sectionNames.some((s) => s.toLowerCase() === filters.section.toLowerCase())) return false;
     if (!matchesTestQuestionBand(test.questions, filters.questionBand)) return false;
     if (!matchesCutoffBand(cutoff, filters.cutoffBand)) return false;
     if (!matchesSectionCountBand(sectionCount, filters.sectionCountBand)) return false;
     if (!matchesAssignmentLoadBand(assignmentCount, filters.assignmentLoad)) return false;
-    if (filters.college !== "all" && !(test.assignedColleges || []).includes(filters.college)) return false;
+    if (filters.college && filters.college !== "all" && !(test.assignedColleges || []).some((c) => c.toLowerCase() === filters.college.toLowerCase())) return false;
     if (!matchesRelativeDateRange(test.createdAt, filters.createdRange, now)) return false;
     if (!matchesRelativeDateRange(test.updatedAt || test.createdAt, filters.updatedRange, now)) return false;
     if (minCutoffValue !== null && cutoff < minCutoffValue) return false;
@@ -362,19 +377,20 @@ export const filterAdminTests = <T extends AdminTestLike>(
     if (createdTo && (!createdAt || createdAt > createdTo)) return false;
 
     if (term) {
+      const keywords = term.split(/\s+/).filter(Boolean);
       const haystack = [
         test.name,
         `${test.duration} min`,
-        `${test.questions}`,
+        `${test.questions} questions`,
         `${cutoff}%`,
-        `${assignmentCount}`,
+        `${assignmentCount} assignments`,
         test.status,
         ...(test.assignedColleges || []),
         ...sectionNames,
       ]
         .join(" ")
         .toLowerCase();
-      if (!haystack.includes(term)) return false;
+      if (!keywords.every((kw) => haystack.includes(kw))) return false;
     }
 
     return true;
@@ -434,6 +450,7 @@ export const filterTestResults = <T extends UserResultLike>(
   const normalizedSearch = filters.search.trim().toLowerCase();
   const filtered = results.filter((result) => {
     if (normalizedSearch) {
+      const keywords = normalizedSearch.split(/\s+/).filter(Boolean);
       const haystack = [
         result.userId,
         result.userName,
@@ -448,13 +465,13 @@ export const filterTestResults = <T extends UserResultLike>(
       ]
         .join(" ")
         .toLowerCase();
-      if (!haystack.includes(normalizedSearch)) return false;
+      if (!keywords.every((kw) => haystack.includes(kw))) return false;
     }
 
     if (result.percentage < filters.minPercent || result.percentage > filters.maxPercent) return false;
     if (filters.status === "passed" && !result.passed) return false;
     if (filters.status === "failed" && result.passed) return false;
-    if (filters.college !== "all" && (result.collegeName || "") !== filters.college) return false;
+    if (filters.college && filters.college !== "all" && (result.collegeName || "").toLowerCase() !== filters.college.toLowerCase()) return false;
     if (filters.scoreBand !== "all" && formatScoreBand(result.percentage) !== filters.scoreBand) return false;
     if (filters.timeSpentBand !== "all" && formatTimeSpentBand(result.timeSpentSec) !== filters.timeSpentBand) return false;
     if (filters.dateFilter !== "all" && !matchesRelativeDateRange(result.submittedAt, filters.dateFilter, now)) return false;
@@ -507,22 +524,22 @@ export const filterResultTests = <
 ) => {
   const normalized = filters.search.trim().toLowerCase();
   const next = tests.filter((test) => {
-    const matchesSearch =
-      !normalized ||
-      [
-        test.name,
-        `${test.questions} questions`,
-        `${test.duration} minutes`,
-        `${test.totalAttempts} attempts`,
-        `${test.avgScore.toFixed(1)}%`,
-        `${test.passRate.toFixed(1)}%`,
-        formatDurationBand(test.duration),
-        formatPassRateBand(test.passRate),
-        test.totalAttempts > 0 ? "with attempts" : "without attempts",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized);
+    const keywords = normalized ? normalized.split(/\s+/).filter(Boolean) : [];
+    const haystack = [
+      test.name,
+      `${test.questions} questions`,
+      `${test.duration} minutes`,
+      `${test.totalAttempts} attempts`,
+      `${test.avgScore.toFixed(1)}%`,
+      `${test.passRate.toFixed(1)}%`,
+      formatDurationBand(test.duration),
+      formatPassRateBand(test.passRate),
+      test.totalAttempts > 0 ? "with attempts" : "without attempts",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const matchesSearch = !keywords.length || keywords.every((kw) => haystack.includes(kw));
 
     const matchesAttempts =
       filters.attempts === "all" ||

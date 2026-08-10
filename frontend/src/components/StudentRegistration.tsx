@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import "./StudentRegistration.css";
-import { apiGet, apiPost } from "../services/api";
+import { apiGet, apiPostForm } from "../services/api";
 
 interface MasterItem {
   id: string;
@@ -26,6 +26,7 @@ interface RegistrationFormData {
   sapCertification: string;
   collegeName: string;
   collegeEmail: string;
+  dob: string;
 }
 
 interface StudentRegistrationProps {
@@ -34,8 +35,6 @@ interface StudentRegistrationProps {
 }
 
 // ── Credentials Popup — rendered via React Portal into document.body ──────────
-// Using a portal means this overlay lives at the top of the DOM and cannot be
-// unmounted by any parent component re-render or state change.
 
 const CredentialsPopup: React.FC<{
   name: string;
@@ -50,7 +49,6 @@ const CredentialsPopup: React.FC<{
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     }).catch(() => {
-      // Fallback for browsers that block clipboard without HTTPS
       prompt("Copy your credentials:", text);
     });
   };
@@ -154,7 +152,6 @@ const CredentialsPopup: React.FC<{
     </div>
   );
 
-  // Portal renders directly into document.body, immune to parent unmounting
   return ReactDOM.createPortal(popup, document.body);
 };
 
@@ -172,7 +169,10 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
     sapCertification: "",
     collegeName: "",
     collegeEmail: "",
+    dob: "",
   });
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [masterData, setMasterData] = useState<MasterData>({
     genders: [],
@@ -211,6 +211,30 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !['jpg', 'jpeg', 'pdf'].includes(ext)) {
+      alert("Invalid file format. Please upload a JPG, JPEG, or PDF file.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds 10MB limit. Please upload a smaller file.");
+      e.target.value = "";
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -223,15 +247,32 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
       alert("Please enter a valid 10-digit mobile number.");
       return;
     }
+    if (!formData.dob) {
+      alert("Please select your Date of Birth.");
+      return;
+    }
+    if (!selectedFile) {
+      alert("Please upload your document (JPG, JPEG, or PDF).");
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const res = await apiPost<{ naxUnid: string }>("/public/register", {
-        ...formData,
-        cgpa: cgpaVal,
-      });
+      const fd = new FormData();
+      fd.append("studentName", formData.studentName);
+      fd.append("studentId", formData.studentId);
+      fd.append("email", formData.email);
+      fd.append("collegeEmail", formData.collegeEmail);
+      fd.append("mobile", formData.mobile);
+      fd.append("gender", formData.gender);
+      fd.append("courseStream", formData.courseStream);
+      fd.append("cgpa", formData.cgpa);
+      fd.append("sapCertification", formData.sapCertification);
+      fd.append("collegeName", formData.collegeName);
+      fd.append("dob", formData.dob);
+      fd.append("document", selectedFile);
 
-      console.log("Registration response:", res); // visible in DevTools → Console
+      const res = await apiPostForm<{ naxUnid: string }>("/public/register", fd);
 
       if (!res.naxUnid) {
         alert("Registration succeeded but no User ID was returned. Please contact support.");
@@ -255,7 +296,6 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
 
   return (
     <>
-      {/* Portal-based popup — survives any parent re-render or unmount */}
       {showPopup && registeredUnid && (
         <CredentialsPopup
           name={formData.studentName}
@@ -364,8 +404,62 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
               </div>
             </div>
 
+            {/* Row 6: DOB & Upload Document */}
+            <div className="reg-form-row">
+              <div className="form-group">
+                <label htmlFor="dob">Date of Birth *</label>
+                <input id="dob" name="dob" type="date"
+                  value={formData.dob} onChange={handleChange}
+                  required />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="docUpload">Upload Document (JPG, JPEG, PDF) *</label>
+                {!selectedFile ? (
+                  <>
+                    <input
+                      id="docUpload"
+                      type="file"
+                      accept=".jpg,.jpeg,.pdf,image/jpeg,image/jpg,application/pdf"
+                      onChange={handleFileChange}
+                      style={{ display: "none" }}
+                      required
+                    />
+                    <label htmlFor="docUpload" className="upload-btn-main">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <span>Upload File</span>
+                    </label>
+                  </>
+                ) : (
+                  <div className="file-preview-card">
+                    <div className="file-preview-icon">
+                      {selectedFile.name.toLowerCase().endsWith(".pdf") ? "📄" : "🖼️"}
+                    </div>
+                    <div className="file-preview-details">
+                      <span className="file-name" title={selectedFile.name}>{selectedFile.name}</span>
+                      <span className="file-size">
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="file-remove-btn"
+                      onClick={clearSelectedFile}
+                      title="Remove file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <button type="submit" className="submit-btn" disabled={isLoading || isMasterLoading}>
-              {isLoading ? "Registering..." : "Register"}
+              {isLoading ? "Registering & Uploading..." : "Register"}
             </button>
           </form>
 

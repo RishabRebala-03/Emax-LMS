@@ -64,7 +64,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       type: q.type,
       question: q.question,
       options: q.options && q.options.length > 0 ? [...q.options] : ['', ''],
-      correctAnswer: isArrayAns ? (q.correctAnswer[0] || '') : ((q.correctAnswer as string) || ''),
+      correctAnswer: isArrayAns ? (q.correctAnswer?.[0] || '') : ((q.correctAnswer as string) || ''),
       correctAnswers: isArrayAns ? (q.correctAnswer as string[]) : (q.correctAnswer ? [q.correctAnswer as string] : []),
       section: q.section,
       marks: q.marks || 1,

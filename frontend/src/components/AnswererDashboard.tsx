@@ -127,6 +127,9 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [hasInterviewPrepAccess, setHasInterviewPrepAccess] = useState(false);
 

@@ -27,6 +27,9 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
         "cgpa": "cgpa",
         "sapCertification": "sapCertification",
         "collegeName": "collegeName",
+        "dob": "dob",
+        "documentUrl": "documentUrl",
+        "documentName": "documentName",
     }
 
     for reg_key, user_key in field_map.items():
@@ -80,6 +83,9 @@ def list_users():
             "cgpa": merged.get("cgpa"),
             "sapCertification": merged.get("sapCertification"),
             "studentId": merged.get("studentId"),
+            "dob": merged.get("dob"),
+            "documentUrl": merged.get("documentUrl"),
+            "documentName": merged.get("documentName"),
         })
     return jsonify({"users": to_jsonable(out)})
 
@@ -259,7 +265,7 @@ def update_user(user_id: str):
     allowed = [
         "name", "email", "mobile", "gender", "collegeName", "collegeEmail",
         "collegeRollNumber", "courseStream", "cgpa", "sapCertification",
-        "naxUnid", "studentId"
+        "naxUnid", "studentId", "dob", "documentUrl", "documentName"
     ]
     updates = {k: payload[k] for k in allowed if k in payload}
     updates["updatedAt"] = datetime.utcnow()
@@ -272,6 +278,7 @@ def update_user(user_id: str):
         **{k: updated.get(k) for k in [
             "name","email","userId","role","createdAt","isActive",
             "naxUnid","mobile","gender","collegeName","collegeEmail",
-            "collegeRollNumber","courseStream","cgpa","sapCertification","studentId"
+            "collegeRollNumber","courseStream","cgpa","sapCertification","studentId",
+            "dob", "documentUrl", "documentName"
         ]}
     })})

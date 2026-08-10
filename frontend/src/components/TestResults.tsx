@@ -385,7 +385,7 @@ const TestResults: React.FC = () => {
     );
 
     return unique
-      .filter(Boolean)
+      .filter((item): item is string => Boolean(item))
       .slice(0, 24)
       .map((item) => ({ value: item, label: item }));
   }, [userResults]);
@@ -697,11 +697,11 @@ const TestResults: React.FC = () => {
 
               <div className="test-stats">
                 <div className="stat-item">
-                  <span className="stat-label">Questions</span>
+                  <span className="stat-label">QUESTIONS</span>
                   <span className="stat-value">{test.questions}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">Duration</span>
+                  <span className="stat-label">DURATION</span>
                   <span className="stat-value">{test.duration}m</span>
                 </div>
               </div>
@@ -720,7 +720,7 @@ const TestResults: React.FC = () => {
               <div className="tag-row">
                 <span className="data-tag">{formatDurationBand(test.duration)}</span>
                 <span className="data-tag">{formatPassRateBand(test.passRate)}</span>
-                <span className="data-tag">{test.totalAttempts > 0 ? 'live data' : 'no attempts'}</span>
+                <span className="data-tag">{test.totalAttempts > 0 ? 'Live Data' : 'No Attempts'}</span>
               </div>
 
               <div className="test-card-footer">
