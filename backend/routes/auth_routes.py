@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
+import secrets
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
@@ -34,7 +35,11 @@ def login():
     if role == "answerer" and not user.get("isActive", True):
         return jsonify({"error": "Your account is inactive. Please contact your administrator."}), 403
 
-    db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLoginAt": datetime.utcnow()}})
+    session_token = secrets.token_urlsafe(32)
+    db.users.update_one({"_id": user["_id"]}, {"$set": {
+        "lastLoginAt": datetime.utcnow(),
+        "activeSessionToken": session_token,
+    }})
 
     res_user = {
         "id":     str(user["_id"]),
@@ -43,7 +48,24 @@ def login():
         "email":  user.get("email"),
         "role":   user.get("role"),
     }
-    return jsonify({"user": to_jsonable(res_user)})
+    return jsonify({"user": to_jsonable(res_user), "sessionToken": session_token})
+
+
+@auth_bp.get("/session")
+def session_status():
+    """Return whether this browser still owns the user's latest login session."""
+    user_id = request.args.get("userId", "").strip()
+    role = request.args.get("role", "").strip()
+    token = request.headers.get("X-Session-Token", "")
+    if not user_id or not role or not token:
+        return jsonify({"valid": False}), 401
+
+    user = get_db().users.find_one({
+        "$or": [{"userId": user_id}, {"naxUnid": user_id}],
+        "role": role,
+        "activeSessionToken": token,
+    }, {"_id": 1})
+    return jsonify({"valid": bool(user)}), (200 if user else 401)
 
 
 @auth_bp.post("/change-password")
