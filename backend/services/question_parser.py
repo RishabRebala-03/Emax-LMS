@@ -182,6 +182,107 @@ def _docx_table_to_html(table, doc) -> str:
 
 
 
+def _try_parse_inline_question(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Detect and extract embedded inline options and inline answers from a single line or paragraph.
+    Handles compressed strings like:
+      "The length of G/L account number should be mentioned ina. G/L account groupsb. G/L accountc. Chart of accountsd. None of the aboveAnswer: c"
+      "1. What is SAP? A. ERP B. Database C. OS D. Browser Answer: A"
+      "Which transaction code is used? (A) FB50 (B) F-02 (C) Both (D) None Ans: C"
+    """
+    if not text or len(text.strip()) < 10:
+        return None
+
+    working = text.strip()
+
+    # 1. Extract inline Answer at the end of the string if present
+    ans_text = ""
+    ans_m = re.search(
+        r'(?i)(?:^|[\s\.\,\;\)]|\b|[a-zA-Z0-9])(?:Answer|Ans|Correct\s*Answer|Correct\s*Option|Key)\s*[:=\-]?\s*([A-Za-z0-9,\s\(\)]+)\s*$',
+        working
+    )
+    if ans_m:
+        ans_text = ans_m.group(1).strip()
+        # Find start of Answer keyword
+        kw_m = re.search(r'(?i)(?:Answer|Ans|Correct\s*Answer|Correct\s*Option|Key)\s*[:=\-]?\s*([A-Za-z0-9,\s\(\)]+)\s*$', working)
+        if kw_m:
+            working = working[:kw_m.start()].strip()
+        else:
+            working = working[:ans_m.start()].strip()
+
+    # 2. Find option markers in order: a., b., c., d. or A), B), C), D) or (A), (B), (C), (D) or 1., 2., 3., 4.
+    marker_pattern = re.compile(
+        r'(?:^|\s|(?<=[a-zA-Z0-9\?\!\.\,\;\)]))'
+        r'([a-zA-Z0-9]*?)'
+        r'(\(?\*?\s*(?:[a-dA-D1-9]|i{1,3}|iv|v)\s*[\.\)\:\-]|\[[a-dA-D1-9]\]|\([a-dA-D1-9]\))'
+        r'\s+', re.IGNORECASE
+    )
+
+    matches = list(marker_pattern.finditer(working))
+    if len(matches) < 2:
+        return None
+
+    def get_clean_letter(m_str: str) -> str:
+        return re.sub(r'[^a-zA-Z0-9]', '', m_str).lower()
+
+    expected_letters = ["a", "b", "c", "d", "e", "f"]
+    expected_nums = ["1", "2", "3", "4", "5", "6"]
+
+    valid_matches = []
+    for m in matches:
+        marker_str = m.group(2)
+        letter = get_clean_letter(marker_str)
+        if valid_matches:
+            prev_letter = get_clean_letter(valid_matches[-1].group(2))
+            if prev_letter in expected_letters and letter in expected_letters:
+                if expected_letters.index(letter) == expected_letters.index(prev_letter) + 1:
+                    valid_matches.append(m)
+            elif prev_letter in expected_nums and letter in expected_nums:
+                if expected_nums.index(letter) == expected_nums.index(prev_letter) + 1:
+                    valid_matches.append(m)
+        else:
+            if letter in ["a", "1"]:
+                valid_matches.append(m)
+
+    if len(valid_matches) < 2:
+        return None
+
+    m0 = valid_matches[0]
+    stem_end = m0.start()
+    attached_stem_suffix = m0.group(1)
+    stem = working[:stem_end].strip()
+    if attached_stem_suffix:
+        stem = (stem + " " + attached_stem_suffix).strip()
+
+    options = []
+    for i in range(len(valid_matches)):
+        curr_m = valid_matches[i]
+        next_m = valid_matches[i + 1] if i + 1 < len(valid_matches) else None
+
+        opt_start = curr_m.end()
+        if next_m:
+            opt_end = next_m.start()
+            attached_suffix = next_m.group(1)
+            opt_text = working[opt_start:opt_end].strip()
+            if attached_suffix:
+                opt_text = (opt_text + " " + attached_suffix).strip()
+        else:
+            opt_text = working[opt_start:].strip()
+
+        if opt_text:
+            marker_label = curr_m.group(2).strip()
+            options.append(f"{marker_label} {opt_text}")
+
+    if stem and len(options) >= 2:
+        return {
+            "stem": stem,
+            "options": options,
+            "answer": ans_text
+        }
+
+    return None
+
+
 def _docx_zip_to_lines(file_bytes: bytes) -> List[str]:
     """
     Extract text lines from a .docx file using standard library zipfile + xml.etree.
@@ -208,10 +309,18 @@ def _docx_zip_to_lines(file_bytes: bytes) -> List[str]:
                         p_text_parts.append(t.text)
                 full_p_text = "".join(p_text_parts).strip()
                 if full_p_text:
-                    for sub in full_p_text.split('\n'):
-                        sub = sub.strip()
-                        if sub:
-                            lines.append(sub)
+                    inline_res = _try_parse_inline_question(full_p_text)
+                    if inline_res:
+                        lines.append(inline_res["stem"])
+                        for opt in inline_res["options"]:
+                            lines.append(opt)
+                        if inline_res["answer"]:
+                            lines.append(f"Answer: {inline_res['answer']}")
+                    else:
+                        for sub in full_p_text.split('\n'):
+                            sub = sub.strip()
+                            if sub:
+                                lines.append(sub)
             return lines
     except Exception:
         return []
@@ -241,12 +350,18 @@ def _docx_to_lines(file_bytes: bytes) -> List[str]:
                         p_obj = docx.text.paragraph.Paragraph(child, doc)
                         txt = _extract_docx_paragraph_text_and_images(p_obj, doc)
                         if txt:
-                            # KEY FIX: split on internal newlines so multi-line paragraphs
-                            # (question + options + answer in one paragraph) become separate lines
-                            for sub in txt.split('\n'):
-                                sub = sub.strip()
-                                if sub:
-                                    out_lines.append(sub)
+                            inline_res = _try_parse_inline_question(txt)
+                            if inline_res:
+                                out_lines.append(inline_res["stem"])
+                                for opt in inline_res["options"]:
+                                    out_lines.append(opt)
+                                if inline_res["answer"]:
+                                    out_lines.append(f"Answer: {inline_res['answer']}")
+                            else:
+                                for sub in txt.split('\n'):
+                                    sub = sub.strip()
+                                    if sub:
+                                        out_lines.append(sub)
                     elif child.tag.endswith('tbl'):
                         t = docx.table.Table(child, doc)
                         headers = []
@@ -279,10 +394,18 @@ def _docx_to_lines(file_bytes: bytes) -> List[str]:
                 for p in doc.paragraphs:
                     txt = _extract_docx_paragraph_text_and_images(p, doc)
                     if txt:
-                        for sub in txt.split('\n'):
-                            sub = sub.strip()
-                            if sub:
-                                out_lines.append(sub)
+                        inline_res = _try_parse_inline_question(txt)
+                        if inline_res:
+                            out_lines.append(inline_res["stem"])
+                            for opt in inline_res["options"]:
+                                out_lines.append(opt)
+                            if inline_res["answer"]:
+                                out_lines.append(f"Answer: {inline_res['answer']}")
+                        else:
+                            for sub in txt.split('\n'):
+                                sub = sub.strip()
+                                if sub:
+                                    out_lines.append(sub)
 
             if out_lines:
                 return out_lines
@@ -983,12 +1106,21 @@ def _parse_lines(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
                 if cleaned:
                     options.append(cleaned)
         else:
-            # No lettered options — use structural detection
-            detected_prompt, detected_opts = _detect_structural_options(
-                q_body, q_answer_raw
-            )
-            prompt_parts = detected_prompt
-            options = [_clean_str(o) for o in detected_opts if _clean_str(o)]
+            # Check if q_body contains inline options before structural detection
+            joined_body = " ".join(q_body).strip()
+            inline_check = _try_parse_inline_question(joined_body)
+            if inline_check:
+                prompt_parts = [inline_check["stem"]]
+                options = [_clean_str(_strip_option_prefix(o) or o) for o in inline_check["options"] if _clean_str(o)]
+                if inline_check["answer"] and not q_answer_raw:
+                    q_answer_raw = inline_check["answer"]
+            else:
+                # No lettered options — use structural detection
+                detected_prompt, detected_opts = _detect_structural_options(
+                    q_body, q_answer_raw
+                )
+                prompt_parts = detected_prompt
+                options = [_clean_str(o) for o in detected_opts if _clean_str(o)]
 
         if not prompt_parts and options:
             prompt_parts = [options.pop(0)]
