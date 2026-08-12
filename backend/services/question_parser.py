@@ -3,6 +3,8 @@ import json
 import csv
 import re
 import base64
+import zipfile
+import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Tuple, Optional
 
 try:
@@ -180,83 +182,125 @@ def _docx_table_to_html(table, doc) -> str:
 
 
 
+def _docx_zip_to_lines(file_bytes: bytes) -> List[str]:
+    """
+    Extract text lines from a .docx file using standard library zipfile + xml.etree.
+    Used when python-docx is unavailable or fails to load a .docx file.
+    Extracts text from word/document.xml without requiring external dependencies.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
+            namelist = zf.namelist()
+            doc_xml_name = "word/document.xml"
+            if doc_xml_name not in namelist:
+                return []
+
+            xml_bytes = zf.read(doc_xml_name)
+            root = ET.fromstring(xml_bytes)
+
+            lines: List[str] = []
+            ns_w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+
+            for p in root.iter(f'{ns_w}p'):
+                p_text_parts = []
+                for t in p.iter(f'{ns_w}t'):
+                    if t.text:
+                        p_text_parts.append(t.text)
+                full_p_text = "".join(p_text_parts).strip()
+                if full_p_text:
+                    for sub in full_p_text.split('\n'):
+                        sub = sub.strip()
+                        if sub:
+                            lines.append(sub)
+            return lines
+    except Exception:
+        return []
+
+
 def _docx_to_lines(file_bytes: bytes) -> List[str]:
     """
     Convert a DOCX to a flat list of text lines, preserving intra-paragraph
     newlines and extracting embedded images as <img> tags.
-    Falls back to _extract_text_from_binary_doc for legacy .doc files.
+    Falls back to zipfile XML parser if python-docx is unavailable/fails,
+    and to _extract_text_from_binary_doc for legacy non-ZIP .doc files.
     """
-    if not docx:
-        raw = _extract_text_from_binary_doc(file_bytes) or file_bytes.decode("utf-8", errors="ignore")
-        return [l for l in raw.splitlines() if l.strip()]
+    if docx:
+        try:
+            doc = docx.Document(io.BytesIO(file_bytes))
 
-    try:
-        doc = docx.Document(io.BytesIO(file_bytes))
-    except Exception:
-        raw = _extract_text_from_binary_doc(file_bytes) or file_bytes.decode("utf-8", errors="ignore")
-        return [l for l in raw.splitlines() if l.strip()]
+            # --- Try structured table extraction first ---
+            table_qs = _try_table_extraction(doc)
+            if table_qs is not None:
+                return table_qs  # Special sentinel: list of dicts, not strings
 
-    # --- Try structured table extraction first ---
-    table_qs = _try_table_extraction(doc)
-    if table_qs is not None:
-        return table_qs  # Special sentinel: list of dicts, not strings
-
-    # --- Extract body elements in document order ---
-    out_lines: List[str] = []
-    try:
-        for child in doc.element.body:
-            if child.tag.endswith('p'):
-                p_obj = docx.text.paragraph.Paragraph(child, doc)
-                txt = _extract_docx_paragraph_text_and_images(p_obj, doc)
-                if txt:
-                    # KEY FIX: split on internal newlines so multi-line paragraphs
-                    # (question + options + answer in one paragraph) become separate lines
-                    for sub in txt.split('\n'):
-                        sub = sub.strip()
-                        if sub:
-                            out_lines.append(sub)
-            elif child.tag.endswith('tbl'):
-                t = docx.table.Table(child, doc)
-                # Check if this looks like a question table (handled by _try_table_extraction)
-                # If not, convert to HTML to preserve structure
-                headers = []
-                try:
-                    if t.rows:
-                        headers = [cell.text.strip().lower() for cell in t.rows[0].cells]
-                except Exception:
-                    pass
-                q_keywords = ["question", "title", "prompt", "stem", "problem", "item", "query", "statement"]
-                is_question_table = any(any(k in h for k in q_keywords) or h in ["q", "q.", "qno", "q.no"] for h in headers)
-
-                if is_question_table:
-                    # Let _try_table_extraction handle this (already ran above)
-                    for row in t.rows:
-                        row_parts = []
-                        for cell in row.cells:
-                            ct = _extract_docx_cell_text_and_images(cell, doc)
-                            if ct:
-                                row_parts.append(ct)
-                        if row_parts:
-                            row_text = " ".join(row_parts)
-                            for sub in row_text.split('\n'):
+            # --- Extract body elements in document order ---
+            out_lines: List[str] = []
+            try:
+                for child in doc.element.body:
+                    if child.tag.endswith('p'):
+                        p_obj = docx.text.paragraph.Paragraph(child, doc)
+                        txt = _extract_docx_paragraph_text_and_images(p_obj, doc)
+                        if txt:
+                            # KEY FIX: split on internal newlines so multi-line paragraphs
+                            # (question + options + answer in one paragraph) become separate lines
+                            for sub in txt.split('\n'):
                                 sub = sub.strip()
                                 if sub:
                                     out_lines.append(sub)
-                else:
-                    # Inline table (data/chart/comparison) — preserve as HTML
-                    html_table = _docx_table_to_html(t, doc)
-                    if html_table:
-                        out_lines.append(html_table)
-    except Exception:
-        for p in doc.paragraphs:
-            txt = _extract_docx_paragraph_text_and_images(p, doc)
-            if txt:
-                for sub in txt.split('\n'):
-                    sub = sub.strip()
-                    if sub:
-                        out_lines.append(sub)
+                    elif child.tag.endswith('tbl'):
+                        t = docx.table.Table(child, doc)
+                        headers = []
+                        try:
+                            if t.rows:
+                                headers = [cell.text.strip().lower() for cell in t.rows[0].cells]
+                        except Exception:
+                            pass
+                        q_keywords = ["question", "title", "prompt", "stem", "problem", "item", "query", "statement"]
+                        is_question_table = any(any(k in h for k in q_keywords) or h in ["q", "q.", "qno", "q.no"] for h in headers)
 
-    return out_lines
+                        if is_question_table:
+                            for row in t.rows:
+                                row_parts = []
+                                for cell in row.cells:
+                                    ct = _extract_docx_cell_text_and_images(cell, doc)
+                                    if ct:
+                                        row_parts.append(ct)
+                                if row_parts:
+                                    row_text = " ".join(row_parts)
+                                    for sub in row_text.split('\n'):
+                                        sub = sub.strip()
+                                        if sub:
+                                            out_lines.append(sub)
+                        else:
+                            html_table = _docx_table_to_html(t, doc)
+                            if html_table:
+                                out_lines.append(html_table)
+            except Exception:
+                for p in doc.paragraphs:
+                    txt = _extract_docx_paragraph_text_and_images(p, doc)
+                    if txt:
+                        for sub in txt.split('\n'):
+                            sub = sub.strip()
+                            if sub:
+                                out_lines.append(sub)
+
+            if out_lines:
+                return out_lines
+        except Exception:
+            pass
+
+    # Fallback 1: Use standard library zipfile to extract clean document XML text
+    zip_lines = _docx_zip_to_lines(file_bytes)
+    if zip_lines:
+        return zip_lines
+
+    # Fallback 2: Legacy binary .doc (non-ZIP Word 97-2003)
+    if not file_bytes.startswith(b'PK\x03\x04'):
+        raw = _extract_text_from_binary_doc(file_bytes)
+        if raw:
+            return [l for l in raw.splitlines() if l.strip()]
+
+    return []
 
 
 def _try_table_extraction(doc) -> Optional[Any]:
@@ -1023,20 +1067,41 @@ def parse_questions_file(file_bytes: bytes, filename: str) -> Tuple[List[Dict[st
     Supports embedded images, unnumbered questions, arbitrary templates, answer keys.
     Returns: (questions, sections)
     """
-    fname = filename.lower()
+    fname = (filename or "").lower()
+
+    is_zip = file_bytes.startswith(b'PK\x03\x04')
+    is_pdf = file_bytes.startswith(b'%PDF')
+    is_docx_or_doc = is_zip or fname.endswith(".docx") or fname.endswith(".doc")
 
     if fname.endswith(".json"):
         return _parse_json(file_bytes)
     if fname.endswith(".csv"):
         return _parse_csv(file_bytes)
-    if fname.endswith(".docx") or fname.endswith(".doc"):
+
+    if is_docx_or_doc:
         result = _docx_to_lines(file_bytes)
         # Check if table extraction returned directly
         if result and isinstance(result, tuple) and result[0] == "TABLE_RESULT":
             return result[1], result[2]
-        return _parse_lines(result)
-    if fname.endswith(".pdf"):
-        return _parse_lines(_pdf_to_lines(file_bytes))
+        if result:
+            return _parse_lines(result)
+
+    if is_pdf or fname.endswith(".pdf"):
+        lines = _pdf_to_lines(file_bytes)
+        if lines:
+            return _parse_lines(lines)
+
+    # Check if content is JSON regardless of filename extension
+    stripped_bytes = file_bytes.strip()
+    if stripped_bytes.startswith((b'{', b'[')):
+        try:
+            return _parse_json(file_bytes)
+        except Exception:
+            pass
+
+    # Guard: NEVER attempt to decode raw ZIP or PDF binary containers as plain UTF-8 text!
+    if is_zip or is_pdf:
+        return [], ["General"]
 
     # Fallback: treat as plain text
     raw = file_bytes.decode("utf-8", errors="replace")

@@ -170,5 +170,28 @@ class TestQuestionParser(unittest.TestCase):
         self.assertIn('DATA: lv_count TYPE i VALUE 10.', questions[0]['question'])
         self.assertEqual(questions[0]['correctAnswer'], '10')
 
+    def test_docx_blob_filename_and_zip_fallback(self):
+        if not docx:
+            self.skipTest("python-docx package not installed")
+
+        doc = docx.Document()
+        doc.add_paragraph("1. What is the capital of France?")
+        doc.add_paragraph("A) London")
+        doc.add_paragraph("B) Paris")
+        doc.add_paragraph("C) Berlin")
+        doc.add_paragraph("D) Madrid")
+        doc.add_paragraph("Ans: B")
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        file_bytes = buf.getvalue()
+
+        # Test parsing when filename has no .docx extension (e.g. 'blob')
+        questions, sections = parse_questions_file(file_bytes, 'blob')
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0]['question'], 'What is the capital of France?')
+        self.assertEqual(questions[0]['correctAnswer'], 'Paris')
+        self.assertNotIn('word/settings.xml', questions[0]['question'])
+
 if __name__ == '__main__':
     unittest.main()
