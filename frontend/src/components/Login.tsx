@@ -7,7 +7,7 @@ import AppIcon from './AppIcons';
 type UserRole = 'admin' | 'answerer';
 
 interface LoginProps {
-  onLogin: (role: UserRole, userId: string) => void;
+  onLogin: (role: UserRole, userId: string, sessionToken?: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -23,12 +23,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     if (!userId || !password) return;
     setIsLoading(true);
     try {
-      const res = await apiPost<{ user: any }>("/auth/login", {
+      const res = await apiPost<{ user: any; sessionToken?: string }>("/auth/login", {
         userId,
         password,
         role: selectedRole,
       });
-      onLogin(res.user.role, res.user.userId);
+      onLogin(res.user.role, res.user.userId, res.sessionToken);
     } catch (err: any) {
       const msg: string = err?.message || err?.error || "";
       if (msg.toLowerCase().includes("inactive")) {
