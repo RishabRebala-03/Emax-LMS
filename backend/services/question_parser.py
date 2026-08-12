@@ -603,7 +603,7 @@ _RE_LETTERED_OPT = re.compile(
 )
 
 _RE_ANS_LINE = re.compile(
-    r'^\s*(?:ans(?:wer)?|correct\s*(?:answer|choice|option)?s?|key|right\s*answer|ans\s*key)\s*[:\-\s]+(.+)',
+    r'^\s*(?:[✓✔☑►\*\-\>\•\s]*)(?:ans(?:wer)?|correct\s*(?:answer|choice|option)?s?|key|right\s*answer|ans\s*key)\s*[:\-\s]+(.+)',
     re.IGNORECASE
 )
 
@@ -1125,6 +1125,17 @@ def _parse_lines(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
         if not prompt_parts and options:
             prompt_parts = [options.pop(0)]
 
+        # Filter out any lines matching _RE_ANS_LINE that accidentally ended up in prompt_parts
+        filtered_prompt_parts = []
+        for p_line in prompt_parts:
+            ans_m = _RE_ANS_LINE.match(p_line)
+            if ans_m:
+                if not q_answer_raw:
+                    q_answer_raw = ans_m.group(1).strip()
+            else:
+                filtered_prompt_parts.append(p_line)
+        prompt_parts = filtered_prompt_parts
+
         prompt = "\n".join(prompt_parts).strip()
         if not prompt:
             continue
@@ -1134,6 +1145,12 @@ def _parse_lines(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
             r'^(?:Q(?:uestion)?\s*[\#\.\-]?\s*\d+[\.\)\:\-]?|\d+[\.\)\:\-]|\(\d+\)|\[\d+\])\s*',
             '', prompt, flags=re.IGNORECASE
         )) or prompt
+
+        # Clean trailing answer lines or key markers from prompt_clean
+        prompt_clean = re.sub(
+            r'(?i)(?:\n|\r\n|\s)*(?:[✓✔☑►\*\-\>\•\s]*)(?:Answer|Ans|Correct\s*Answer|Correct\s*Option|Key)\s*[:=\-]?\s*.*$',
+            '', prompt_clean
+        ).strip()
 
         # Extract marks from prompt
         prompt_clean, detected_marks = _extract_marks(prompt_clean)

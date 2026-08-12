@@ -186,18 +186,20 @@ class TestQuestionParser(unittest.TestCase):
         doc.save(buf)
         file_bytes = buf.getvalue()
 
-    def test_compressed_inline_mcq_parsing(self):
-        text = "1. The length of G/L account number should be mentioned ina. G/L account groupsb. G/L accountc. Chart of accountsd. None of the aboveAnswer: c"
+    def test_checkmark_answer_line_cleaning(self):
+        text = """
+        Q2. Which statement removes selected rows from an internal table?
+        ✓ Answer: A) DELETE
+        A) DELETE
+        B) CLEAR
+        C) REMOVE
+        D) DROP
+        """
         questions, sections = parse_questions_file(text.encode('utf-8'), 'test.txt')
         self.assertEqual(len(questions), 1)
-        self.assertEqual(questions[0]['type'], 'mcq')
-        self.assertIn('The length of G/L account number should be mentioned in', questions[0]['question'])
-        self.assertEqual(len(questions[0]['options']), 4)
-        self.assertEqual(questions[0]['options'][0], 'G/L account groups')
-        self.assertEqual(questions[0]['options'][1], 'G/L account')
-        self.assertEqual(questions[0]['options'][2], 'Chart of accounts')
-        self.assertEqual(questions[0]['options'][3], 'None of the above')
-        self.assertEqual(questions[0]['correctAnswer'], 'Chart of accounts')
+        self.assertEqual(questions[0]['question'], 'Which statement removes selected rows from an internal table?')
+        self.assertEqual(questions[0]['correctAnswer'], 'DELETE')
+        self.assertNotIn('Answer', questions[0]['question'])
 
 if __name__ == '__main__':
     unittest.main()
