@@ -433,9 +433,16 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     <div className="test-builder page-with-topbar">
       <div className="page-header">
         <h2>Edit Test</h2>
-        <button className="secondary-btn" onClick={onBack}>
-          ← Back to Tests
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button className="secondary-btn" onClick={onBack}>
+            ← Back to Tests
+          </button>
+          {questions.length > 0 && (
+            <button className="primary-btn" onClick={handleUpdateTest}>
+              Update Test
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="form-card">
@@ -932,14 +939,6 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
           </div>
         )}
       </div>
-
-      {questions.length > 0 && (
-        <div className="form-actions">
-          <button className="primary-btn large" onClick={handleUpdateTest}>
-            Update Test
-          </button>
-        </div>
-      )}
     </div>
   );
 };
