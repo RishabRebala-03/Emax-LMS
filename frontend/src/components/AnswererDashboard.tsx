@@ -105,6 +105,8 @@ interface SapRegistrationProfile {
   documentName?: string;
   needsSapRegistration: boolean;
   hasSapRegistrationTab: boolean;
+  canEditFirstName: boolean;
+  canEditLastName: boolean;
   canEditDob: boolean;
   canUploadDocument: boolean;
 }
@@ -498,8 +500,12 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
       return;
     }
 
-    if (!sapRegistrationFirstName.trim() || !sapRegistrationLastName.trim()) {
-      setSapRegistrationError("Enter both First Name and Last Name.");
+    if (sapRegistrationProfile.canEditFirstName && !sapRegistrationFirstName.trim()) {
+      setSapRegistrationError("Enter your First Name.");
+      return;
+    }
+    if (sapRegistrationProfile.canEditLastName && !sapRegistrationLastName.trim()) {
+      setSapRegistrationError("Enter your Last Name.");
       return;
     }
     if (sapRegistrationProfile.canEditDob && !sapRegistrationDob) {
@@ -517,8 +523,12 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     try {
       const fd = new FormData();
       fd.append("userId", userName);
-      fd.append("firstName", sapRegistrationFirstName.trim());
-      fd.append("lastName", sapRegistrationLastName.trim());
+      if (sapRegistrationProfile.canEditFirstName) {
+        fd.append("firstName", sapRegistrationFirstName.trim());
+      }
+      if (sapRegistrationProfile.canEditLastName) {
+        fd.append("lastName", sapRegistrationLastName.trim());
+      }
       if (sapRegistrationProfile.canEditDob) {
         fd.append("dob", sapRegistrationDob);
       }
@@ -536,6 +546,9 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
       setSapRegistrationDob(res.profile.dob || "");
       setSapRegistrationFile(null);
       setSapRegistrationMessage(res.message || "SAP registration details updated successfully.");
+      window.setTimeout(() => {
+        navigate('/dashboard');
+      }, 900);
     } catch (err: any) {
       setSapRegistrationError(err?.message || "Failed to update SAP registration details.");
     } finally {
@@ -907,7 +920,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                   <h2>{sapRegistrationProfile.needsSapRegistration ? "Complete your SAP registration details" : "SAP registration details"}</h2>
                   <p>
                     {sapRegistrationProfile.needsSapRegistration
-                      ? "Your existing registration details are shown below. Only the missing Date of Birth and document upload can be updated."
+                      ? "Your existing registration details are shown below. Only missing fields can be updated."
                       : "Your submitted SAP registration details are shown below and cannot be edited."}
                   </p>
                 </div>
@@ -931,8 +944,8 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                           value={sapRegistrationFirstName}
                           onChange={(e) => setSapRegistrationFirstName(e.target.value)}
                           placeholder="Enter first name"
-                          readOnly={!sapRegistrationProfile.needsSapRegistration}
-                          required
+                          readOnly={!sapRegistrationProfile.canEditFirstName}
+                          required={sapRegistrationProfile.canEditFirstName}
                         />
                       </div>
                       <div className="sap-edit-field">
@@ -943,8 +956,8 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                           value={sapRegistrationLastName}
                           onChange={(e) => setSapRegistrationLastName(e.target.value)}
                           placeholder="Enter last name"
-                          readOnly={!sapRegistrationProfile.needsSapRegistration}
-                          required
+                          readOnly={!sapRegistrationProfile.canEditLastName}
+                          required={sapRegistrationProfile.canEditLastName}
                         />
                       </div>
                     </div>

@@ -100,6 +100,12 @@ def _student_registration_profile(user: dict, registration: dict | None) -> dict
     document_url = _registration_value(user, registration, "documentUrl")
     first_name, last_name = _name_parts(user, registration)
     full_name = str(_registration_value(user, registration, "name", "studentName") or f"{first_name} {last_name}").strip()
+    stored_first_name = _registration_value(user, registration, "firstName")
+    stored_last_name = _registration_value(user, registration, "lastName")
+    needs_first_name = not _has_value(stored_first_name)
+    needs_last_name = not _has_value(stored_last_name)
+    needs_dob = not _has_value(dob)
+    needs_document = not _has_value(document_url)
     return {
         "userId": user.get("userId"),
         "naxUnid": _registration_value(user, registration, "naxUnid"),
@@ -118,10 +124,12 @@ def _student_registration_profile(user: dict, registration: dict | None) -> dict
         "dob": dob,
         "documentUrl": document_url,
         "documentName": _registration_value(user, registration, "documentName"),
-        "needsSapRegistration": not (_has_value(dob) and _has_value(document_url)),
-        "hasSapRegistrationTab": True,
-        "canEditDob": not _has_value(dob),
-        "canUploadDocument": not _has_value(document_url),
+        "needsSapRegistration": needs_first_name or needs_last_name or needs_dob or needs_document,
+        "hasSapRegistrationTab": needs_first_name or needs_last_name or needs_dob or needs_document,
+        "canEditFirstName": needs_first_name or needs_last_name,
+        "canEditLastName": needs_first_name or needs_last_name,
+        "canEditDob": needs_dob,
+        "canUploadDocument": needs_document,
     }
 
 
@@ -313,15 +321,20 @@ def complete_sap_registration_profile():
         return jsonify({"error": "SAP registration details are already completed for this student."}), 409
 
     updates = {}
-    first_name = str(data.get("firstName") or "").strip()
-    last_name = str(data.get("lastName") or "").strip()
-    if not first_name or not last_name:
-        return jsonify({"error": "First Name and Last Name are required"}), 400
+    first_name = str(data.get("firstName") or profile.get("firstName") or "").strip()
+    last_name = str(data.get("lastName") or profile.get("lastName") or "").strip()
+    if profile.get("canEditFirstName"):
+        if not first_name:
+            return jsonify({"error": "First Name is required"}), 400
+        updates["firstName"] = first_name
+    if profile.get("canEditLastName"):
+        if not last_name:
+            return jsonify({"error": "Last Name is required"}), 400
+        updates["lastName"] = last_name
 
     full_name = f"{first_name} {last_name}".strip()
-    updates["firstName"] = first_name
-    updates["lastName"] = last_name
-    updates["name"] = full_name
+    if profile.get("canEditFirstName") or profile.get("canEditLastName"):
+        updates["name"] = full_name
 
     if profile["canEditDob"]:
         dob = str(data.get("dob") or "").strip()
