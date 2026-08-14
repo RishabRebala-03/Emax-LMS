@@ -12,6 +12,8 @@ type IconName =
   | "completed"
   | "score"
   | "security"
+  | "registration"
+  | "upload"
   | "trophy"
   | "streak"
   | "interview";
@@ -95,6 +97,22 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M12 3 6 5.5v5.5c0 4 2.6 7.6 6 9 3.4-1.4 6-5 6-9V5.5L12 3Z" />
       <path d="M10 11.5V10a2 2 0 1 1 4 0v1.5" />
       <rect x="9" y="11.5" width="6" height="4.5" rx="1" />
+    </>
+  ),
+  registration: (
+    <>
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3" />
+      <path d="m14 17 1.5 1.5L19 15" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m17 8-5-5-5 5" />
+      <path d="M12 3v12" />
     </>
   ),
   trophy: (

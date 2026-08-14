@@ -11,10 +11,17 @@ admin_users_bp = Blueprint("admin_users", __name__)
 
 
 def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict:
-    if not registration:
-        return user
-
     merged = dict(user)
+    if not registration:
+        full_name = str(merged.get("name") or "").strip()
+        if full_name:
+            parts = full_name.split()
+            if merged.get("firstName") in (None, ""):
+                merged["firstName"] = parts[0]
+            if merged.get("lastName") in (None, ""):
+                merged["lastName"] = " ".join(parts[1:])
+        return merged
+
     field_map = {
         "naxUnid": "naxUnid",
         "studentName": "name",
@@ -30,6 +37,8 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
         "dob": "dob",
         "documentUrl": "documentUrl",
         "documentName": "documentName",
+        "firstName": "firstName",
+        "lastName": "lastName",
     }
 
     for reg_key, user_key in field_map.items():
@@ -38,6 +47,15 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
 
     if merged.get("collegeRollNumber") in (None, "") and registration.get("studentId"):
         merged["collegeRollNumber"] = registration.get("studentId")
+
+    if merged.get("firstName") in (None, "") or merged.get("lastName") in (None, ""):
+        full_name = str(merged.get("name") or "").strip()
+        if full_name:
+            parts = full_name.split()
+            if merged.get("firstName") in (None, ""):
+                merged["firstName"] = parts[0]
+            if merged.get("lastName") in (None, ""):
+                merged["lastName"] = " ".join(parts[1:])
 
     return merged
 
@@ -68,6 +86,8 @@ def list_users():
         out.append({
             "id": str(merged["_id"]),
             "name": merged.get("name"),
+            "firstName": merged.get("firstName"),
+            "lastName": merged.get("lastName"),
             "email": merged.get("email"),
             "userId": merged.get("userId"),
             "role": merged.get("role"),
@@ -106,8 +126,12 @@ def create_user():
     if db.users.find_one({"userId": userId}):
         return jsonify({"error": "userId already exists"}), 409
     
+    name = payload["name"].strip()
+    name_parts = name.split()
     doc = {
-        "name": payload["name"].strip(),
+        "name": name,
+        "firstName": str(payload.get("firstName") or (name_parts[0] if name_parts else "")).strip(),
+        "lastName": str(payload.get("lastName") or (" ".join(name_parts[1:]) if len(name_parts) > 1 else "")).strip(),
         "email": payload["email"].strip().lower(),
         "userId": userId,
         "password": str(payload["password"]).strip(),  # plain text (as requested)
@@ -121,6 +145,8 @@ def create_user():
         "user": to_jsonable({
             "id": str(res.inserted_id),
             "name": doc["name"],
+            "firstName": doc["firstName"],
+            "lastName": doc["lastName"],
             "email": doc["email"],
             "userId": doc["userId"],
             "role": doc["role"],
@@ -263,7 +289,7 @@ def update_user(user_id: str):
         return jsonify({"error": "User not found"}), 404
 
     allowed = [
-        "name", "email", "mobile", "gender", "collegeName", "collegeEmail",
+        "name", "firstName", "lastName", "email", "mobile", "gender", "collegeName", "collegeEmail",
         "collegeRollNumber", "courseStream", "cgpa", "sapCertification",
         "naxUnid", "studentId", "dob", "documentUrl", "documentName"
     ]
@@ -276,7 +302,7 @@ def update_user(user_id: str):
     return jsonify({"user": to_jsonable({
         "id": str(updated["_id"]),
         **{k: updated.get(k) for k in [
-            "name","email","userId","role","createdAt","isActive",
+            "name","firstName","lastName","email","userId","role","createdAt","isActive",
             "naxUnid","mobile","gender","collegeName","collegeEmail",
             "collegeRollNumber","courseStream","cgpa","sapCertification","studentId",
             "dob", "documentUrl", "documentName"

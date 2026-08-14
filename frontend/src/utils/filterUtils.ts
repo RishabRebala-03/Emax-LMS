@@ -19,6 +19,8 @@ export type PortalSortDir = "asc" | "desc";
 
 export interface PortalUserLike {
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   userId?: string;
   naxUnid?: string;
@@ -214,6 +216,8 @@ export const filterPortalUsers = <T extends PortalUserLike>(
       const keywords = filters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const haystack = [
         user.name,
+        user.firstName,
+        user.lastName,
         user.email,
         user.userId,
         user.naxUnid,

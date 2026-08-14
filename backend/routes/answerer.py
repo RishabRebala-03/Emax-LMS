@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime, timedelta
 from bson import ObjectId
+from werkzeug.utils import secure_filename
 import base64
 import hashlib
 import hmac
@@ -38,9 +39,90 @@ SAP_ODATA_USERNAME = "AITEST1"
 SAP_ODATA_PASSWORD = "Naxrita@2026"
 SAP_UNLOCK_ACTION = "UnLock"
 SAP_UNLOCK_WINDOW_MINUTES = 5
+ALLOWED_REGISTRATION_DOCUMENT_EXTENSIONS = {"jpg", "jpeg", "pdf"}
 
 def _normalize_user_id(value: str) -> str:
     return str(value or "").strip()
+
+
+def _has_value(value) -> bool:
+    return value is not None and str(value).strip() != ""
+
+
+def _registration_document_allowed(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_REGISTRATION_DOCUMENT_EXTENSIONS
+
+
+def _find_student_registration(db, user: dict) -> dict | None:
+    lookup_keys = [
+        user.get("naxUnid"),
+        user.get("userId"),
+        user.get("studentId"),
+        user.get("email"),
+    ]
+    for key in filter(None, lookup_keys):
+        reg = db.student_registrations.find_one({
+            "$or": [
+                {"naxUnid": key},
+                {"studentId": key},
+                {"email": str(key).strip().lower()},
+            ]
+        })
+        if reg:
+            return reg
+    return None
+
+
+def _registration_value(user: dict, registration: dict | None, user_key: str, reg_key: str | None = None):
+    value = user.get(user_key)
+    if _has_value(value):
+        return value
+    if registration:
+        return registration.get(reg_key or user_key)
+    return None
+
+
+def _name_parts(user: dict, registration: dict | None) -> tuple[str, str]:
+    first_name = _registration_value(user, registration, "firstName")
+    last_name = _registration_value(user, registration, "lastName")
+    if _has_value(first_name) or _has_value(last_name):
+        return str(first_name or "").strip(), str(last_name or "").strip()
+
+    full_name = str(_registration_value(user, registration, "name", "studentName") or "").strip()
+    if not full_name:
+        return "", ""
+    parts = full_name.split()
+    return parts[0], " ".join(parts[1:])
+
+
+def _student_registration_profile(user: dict, registration: dict | None) -> dict:
+    dob = _registration_value(user, registration, "dob")
+    document_url = _registration_value(user, registration, "documentUrl")
+    first_name, last_name = _name_parts(user, registration)
+    full_name = str(_registration_value(user, registration, "name", "studentName") or f"{first_name} {last_name}").strip()
+    return {
+        "userId": user.get("userId"),
+        "naxUnid": _registration_value(user, registration, "naxUnid"),
+        "studentName": full_name,
+        "firstName": first_name,
+        "lastName": last_name,
+        "studentId": _registration_value(user, registration, "studentId"),
+        "email": _registration_value(user, registration, "email"),
+        "collegeEmail": _registration_value(user, registration, "collegeEmail"),
+        "mobile": _registration_value(user, registration, "mobile"),
+        "gender": _registration_value(user, registration, "gender"),
+        "collegeName": _registration_value(user, registration, "collegeName"),
+        "courseStream": _registration_value(user, registration, "courseStream"),
+        "cgpa": _registration_value(user, registration, "cgpa"),
+        "sapCertification": _registration_value(user, registration, "sapCertification"),
+        "dob": dob,
+        "documentUrl": document_url,
+        "documentName": _registration_value(user, registration, "documentName"),
+        "needsSapRegistration": not (_has_value(dob) and _has_value(document_url)),
+        "hasSapRegistrationTab": True,
+        "canEditDob": not _has_value(dob),
+        "canUploadDocument": not _has_value(document_url),
+    }
 
 
 def _mask_email(email: str) -> str:
@@ -185,6 +267,122 @@ def get_interview_prep_access():
     db = get_db()
     doc = db.interview_prep_assignments.find_one({"userId": userId, "status": "assigned"})
     return jsonify({"hasAccess": doc is not None})
+
+
+@answerer_bp.get("/sap-registration")
+def get_sap_registration_profile():
+    userId = _normalize_user_id(request.args.get("userId"))
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    user = db.users.find_one({
+        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "role": "answerer",
+    }, {"password": 0})
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    registration = _find_student_registration(db, user)
+    return jsonify({"profile": to_jsonable(_student_registration_profile(user, registration))})
+
+
+@answerer_bp.post("/sap-registration/complete")
+def complete_sap_registration_profile():
+    if request.content_type and "multipart/form-data" in request.content_type:
+        data = request.form.to_dict()
+    else:
+        data = request.get_json(silent=True) or {}
+
+    ok, msg = require_fields(data, ["userId"])
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    userId = _normalize_user_id(data["userId"])
+    db = get_db()
+    user = db.users.find_one({
+        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "role": "answerer",
+    })
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    registration = _find_student_registration(db, user)
+    profile = _student_registration_profile(user, registration)
+    if not profile["needsSapRegistration"]:
+        return jsonify({"error": "SAP registration details are already completed for this student."}), 409
+
+    updates = {}
+    first_name = str(data.get("firstName") or "").strip()
+    last_name = str(data.get("lastName") or "").strip()
+    if not first_name or not last_name:
+        return jsonify({"error": "First Name and Last Name are required"}), 400
+
+    full_name = f"{first_name} {last_name}".strip()
+    updates["firstName"] = first_name
+    updates["lastName"] = last_name
+    updates["name"] = full_name
+
+    if profile["canEditDob"]:
+        dob = str(data.get("dob") or "").strip()
+        if not dob:
+            return jsonify({"error": "Date of Birth is required"}), 400
+        try:
+            datetime.strptime(dob, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Date of Birth must be in YYYY-MM-DD format"}), 400
+        updates["dob"] = dob
+
+    if profile["canUploadDocument"]:
+        uploaded_file = request.files.get("document") or request.files.get("file")
+        if not uploaded_file or not uploaded_file.filename:
+            return jsonify({"error": "Document upload is required"}), 400
+
+        filename = secure_filename(uploaded_file.filename)
+        if not _registration_document_allowed(filename):
+            return jsonify({"error": "Invalid file format. Only JPG, JPEG, and PDF files are allowed."}), 400
+
+        uploaded_file.seek(0, os.SEEK_END)
+        file_length = uploaded_file.tell()
+        uploaded_file.seek(0)
+        if file_length > 10 * 1024 * 1024:
+            return jsonify({"error": "File size exceeds maximum limit of 10MB"}), 400
+
+        canonical_user_id = str(user.get("naxUnid") or user.get("userId") or userId).strip()
+        ext = filename.rsplit(".", 1)[1].lower()
+        timestamp = int(datetime.utcnow().timestamp())
+        safe_saved_filename = f"{canonical_user_id}_{timestamp}.{ext}"
+
+        docs_dir = os.path.join(current_app.root_path, "uploads", "documents")
+        os.makedirs(docs_dir, exist_ok=True)
+        uploaded_file.save(os.path.join(docs_dir, safe_saved_filename))
+
+        updates["documentUrl"] = f"/uploads/documents/{safe_saved_filename}"
+        updates["documentName"] = uploaded_file.filename
+
+    now = datetime.utcnow()
+    user_updates = dict(updates)
+    user_updates["sapRegistrationCompletedAt"] = now
+    user_updates["updatedAt"] = now
+    db.users.update_one({"_id": user["_id"]}, {"$set": user_updates})
+
+    if registration:
+        registration_updates = dict(updates)
+        registration_updates["studentName"] = full_name
+        registration_updates.pop("name", None)
+        registration_updates["sapRegistrationCompletedAt"] = now
+        registration_updates["updatedAt"] = now
+        db.student_registrations.update_one(
+            {"_id": registration["_id"]},
+            {"$set": registration_updates},
+        )
+
+    updated_user = db.users.find_one({"_id": user["_id"]}, {"password": 0})
+    updated_registration = _find_student_registration(db, updated_user)
+    return jsonify({
+        "message": "SAP registration details updated successfully.",
+        "profile": to_jsonable(_student_registration_profile(updated_user, updated_registration)),
+    })
 
 
 @answerer_bp.get("/account-security")

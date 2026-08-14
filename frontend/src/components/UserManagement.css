@@ -157,18 +157,74 @@
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
 }
 .um-col-picker-header h3 { margin: 0; font-size: 1rem; font-weight: 400; color: #1d2d3e; }
-.um-col-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.um-col-tag {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 0.4rem 0.75rem; border: 1px solid #d9d9d9; border-radius: 999px;
-  font-size: 0.8125rem; cursor: grab; user-select: none; transition: all 0.15s; font-family: inherit;
+.um-col-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
-.um-col-tag.on  { background: #ebf5ff; border-color: #0070f2; color: #0070f2; }
-.um-col-tag.off { background: #f5f6f7; color: #9ca3af; }
-.um-col-tag:hover { box-shadow: 0 2px 8px rgba(0,112,242,0.15); }
-.um-col-tag input { display: none; }
-.um-col-drag-handle { opacity: 0.45; display: flex; align-items: center; }
-.um-col-hint { margin-top: 0.75rem; font-size: 0.775rem; color: #9ca3af; font-style: italic; }
+.um-col-chip {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #d9d9d9;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
+  user-select: none;
+}
+.um-col-chip.on {
+  border-color: #0070f2;
+  background: #ebf5ff;
+  color: #0070f2;
+}
+.um-col-chip.off {
+  background: #f5f6f7;
+  color: #9ca3af;
+  cursor: pointer;
+}
+.um-col-chip.dragging {
+  transform: scale(1.03);
+  box-shadow: 0 0.35rem 1rem rgba(0, 112, 242, 0.18);
+}
+.um-col-grip,
+.um-col-label {
+  min-height: 2.25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+}
+.um-col-grip {
+  width: 2.05rem;
+  justify-content: center;
+  cursor: grab;
+}
+.um-col-grip:active {
+  cursor: grabbing;
+}
+.um-col-grip.disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.um-col-grip svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  opacity: 0.65;
+}
+.um-col-label {
+  padding: 0 0.85rem 0 0.1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.um-col-hint {
+  margin-top: 0.75rem;
+  font-size: 0.775rem;
+  color: #9ca3af;
+  font-style: italic;
+}
 
 /* ── Filters ── */
 .um-filter-header {

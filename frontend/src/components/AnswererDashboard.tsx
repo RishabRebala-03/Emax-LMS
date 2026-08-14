@@ -3,11 +3,11 @@ import TestInterface from "./TestInterface";
 import StudentCourses from "./StudentCourses";
 import InterviewPrep from "./InterviewPrep";
 import "./AnswererDashboard.css";
-import { apiGet, apiPost } from "../services/api";
+import { apiGet, apiPost, apiPostForm } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import AppIcon from "./AppIcons";
 
-type AnswererView = "dashboard" | "tests" | "history" | "courses" | "account-security" | "interview-prep";
+type AnswererView = "dashboard" | "tests" | "history" | "courses" | "account-security" | "sap-registration" | "interview-prep";
 
 const viewToPath: Record<AnswererView, string> = {
   'dashboard': '/dashboard',
@@ -15,6 +15,7 @@ const viewToPath: Record<AnswererView, string> = {
   'history': '/dashboard/history',
   'courses': '/dashboard/courses',
   'account-security': '/dashboard/account-security',
+  'sap-registration': '/dashboard/sap-registration',
   'interview-prep': '/dashboard/interview-prep',
 };
 
@@ -24,6 +25,7 @@ const pathToView: Record<string, AnswererView> = {
   '/dashboard/history': 'history',
   '/dashboard/courses': 'courses',
   '/dashboard/account-security': 'account-security',
+  '/dashboard/sap-registration': 'sap-registration',
   '/dashboard/interview-prep': 'interview-prep',
 };
 
@@ -83,6 +85,30 @@ interface AccountSecurityInfo {
   unlockMethod?: string;
 }
 
+interface SapRegistrationProfile {
+  userId: string;
+  naxUnid?: string;
+  studentName?: string;
+  firstName?: string;
+  lastName?: string;
+  studentId?: string;
+  email?: string;
+  collegeEmail?: string;
+  mobile?: string;
+  gender?: string;
+  collegeName?: string;
+  courseStream?: string;
+  cgpa?: number | string;
+  sapCertification?: string;
+  dob?: string;
+  documentUrl?: string;
+  documentName?: string;
+  needsSapRegistration: boolean;
+  hasSapRegistrationTab: boolean;
+  canEditDob: boolean;
+  canUploadDocument: boolean;
+}
+
 type SapSystem = "SHD" | "EMQ" | "EMP" | "EMD"; // Add more SAP systems as needed
 
 const SAP_SYSTEMS: SapSystem[] = ["SHD", "EMQ", "EMP", "EMD"];
@@ -119,6 +145,15 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const [sapUnlockError, setSapUnlockError] = useState("");
   const [sapUnlockMessage, setSapUnlockMessage] = useState("");
   const [selectedSapSystem, setSelectedSapSystem] = useState<SapSystem>("SHD");
+  const [sapRegistrationProfile, setSapRegistrationProfile] = useState<SapRegistrationProfile | null>(null);
+  const [loadingSapRegistration, setLoadingSapRegistration] = useState(false);
+  const [sapRegistrationFirstName, setSapRegistrationFirstName] = useState("");
+  const [sapRegistrationLastName, setSapRegistrationLastName] = useState("");
+  const [sapRegistrationDob, setSapRegistrationDob] = useState("");
+  const [sapRegistrationFile, setSapRegistrationFile] = useState<File | null>(null);
+  const [savingSapRegistration, setSavingSapRegistration] = useState(false);
+  const [sapRegistrationMessage, setSapRegistrationMessage] = useState("");
+  const [sapRegistrationError, setSapRegistrationError] = useState("");
 
   // when user chooses a test, we load it and render TestInterface
   const [activeExam, setActiveExam] = useState<ExamForTaking | null>(null);
@@ -211,11 +246,33 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     }
   };
 
+  const loadSapRegistrationProfile = async () => {
+    setLoadingSapRegistration(true);
+    try {
+      const res = await apiGet<{ profile: SapRegistrationProfile }>(
+        `/answerer/sap-registration?userId=${encodeURIComponent(userName)}`
+      );
+      setSapRegistrationProfile(res.profile);
+      setSapRegistrationFirstName(res.profile.firstName || "");
+      setSapRegistrationLastName(res.profile.lastName || "");
+      setSapRegistrationDob(res.profile.dob || "");
+      if (activeView === "sap-registration" && !res.profile.hasSapRegistrationTab) {
+        navigate('/dashboard');
+      }
+    } catch (e) {
+      console.error(e);
+      setSapRegistrationProfile(null);
+    } finally {
+      setLoadingSapRegistration(false);
+    }
+  };
+
   useEffect(() => {
     loadInsights();
     loadAssignedTests();
     loadTestHistory();
     loadInterviewPrepAccess();
+    loadSapRegistrationProfile();
     if (activeView === "account-security") {
       loadAccountSecurity();
     }
@@ -227,6 +284,12 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
       navigate('/dashboard');
     }
   }, [activeView, hasInterviewPrepAccess]);
+
+  useEffect(() => {
+    if (activeView === "sap-registration" && sapRegistrationProfile && !sapRegistrationProfile.hasSapRegistrationTab) {
+      navigate('/dashboard');
+    }
+  }, [activeView, sapRegistrationProfile]);
 
   useEffect(() => {
     if (activeView === "account-security") {
@@ -407,6 +470,79 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     setShowUnlockWindow(false);
   };
 
+  const handleSapRegistrationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!ext || !["jpg", "jpeg", "pdf"].includes(ext)) {
+      setSapRegistrationError("Upload a JPG, JPEG, or PDF file.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setSapRegistrationError("Document must be 10MB or smaller.");
+      e.target.value = "";
+      return;
+    }
+
+    setSapRegistrationError("");
+    setSapRegistrationFile(file);
+  };
+
+  const handleSapRegistrationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sapRegistrationProfile) return;
+    if (!sapRegistrationProfile.needsSapRegistration) {
+      setSapRegistrationError("SAP registration details are already completed and cannot be edited.");
+      return;
+    }
+
+    if (!sapRegistrationFirstName.trim() || !sapRegistrationLastName.trim()) {
+      setSapRegistrationError("Enter both First Name and Last Name.");
+      return;
+    }
+    if (sapRegistrationProfile.canEditDob && !sapRegistrationDob) {
+      setSapRegistrationError("Select your Date of Birth.");
+      return;
+    }
+    if (sapRegistrationProfile.canUploadDocument && !sapRegistrationFile) {
+      setSapRegistrationError("Upload your document.");
+      return;
+    }
+
+    setSavingSapRegistration(true);
+    setSapRegistrationError("");
+    setSapRegistrationMessage("");
+    try {
+      const fd = new FormData();
+      fd.append("userId", userName);
+      fd.append("firstName", sapRegistrationFirstName.trim());
+      fd.append("lastName", sapRegistrationLastName.trim());
+      if (sapRegistrationProfile.canEditDob) {
+        fd.append("dob", sapRegistrationDob);
+      }
+      if (sapRegistrationProfile.canUploadDocument && sapRegistrationFile) {
+        fd.append("document", sapRegistrationFile);
+      }
+
+      const res = await apiPostForm<{ message: string; profile: SapRegistrationProfile }>(
+        "/answerer/sap-registration/complete",
+        fd
+      );
+      setSapRegistrationProfile(res.profile);
+      setSapRegistrationFirstName(res.profile.firstName || "");
+      setSapRegistrationLastName(res.profile.lastName || "");
+      setSapRegistrationDob(res.profile.dob || "");
+      setSapRegistrationFile(null);
+      setSapRegistrationMessage(res.message || "SAP registration details updated successfully.");
+    } catch (err: any) {
+      setSapRegistrationError(err?.message || "Failed to update SAP registration details.");
+    } finally {
+      setSavingSapRegistration(false);
+    }
+  };
+
   useEffect(() => {
     if (!isUnlockFlowActive) {
       return;
@@ -420,6 +556,21 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isUnlockFlowActive]);
+
+  const profileDetailRows = sapRegistrationProfile
+    ? [
+        { label: "Full Name", value: sapRegistrationProfile.studentName },
+        { label: "Student ID", value: sapRegistrationProfile.studentId },
+        { label: "Personal Email ID", value: sapRegistrationProfile.email },
+        { label: "College Email ID", value: sapRegistrationProfile.collegeEmail },
+        { label: "Mobile Number", value: sapRegistrationProfile.mobile },
+        { label: "Gender", value: sapRegistrationProfile.gender },
+        { label: "College Name", value: sapRegistrationProfile.collegeName },
+        { label: "Course Stream", value: sapRegistrationProfile.courseStream },
+        { label: "Last Semester CGPA", value: sapRegistrationProfile.cgpa },
+        { label: "SAP Certification", value: sapRegistrationProfile.sapCertification },
+      ]
+    : [];
 
   return (
     <div className="answerer-container">
@@ -475,6 +626,16 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
               <AppIcon name="security" className="nav-icon" />
               SAP Account Security
             </button>
+
+            {sapRegistrationProfile?.hasSapRegistrationTab && (
+              <button
+                className={`nav-item ${activeView === "sap-registration" ? "active" : ""}`}
+                onClick={() => setActiveView("sap-registration")}
+              >
+                <AppIcon name="registration" className="nav-icon" />
+                SAP Registration
+              </button>
+            )}
 
             {hasInterviewPrepAccess && (
               <button
@@ -727,6 +888,145 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
             </div>
 
             <InterviewPrep />
+          </>
+        )}
+
+        {activeView === "sap-registration" && sapRegistrationProfile?.hasSapRegistrationTab && (
+          <>
+            <div className="dashboard-topbar">
+              <div className="dashboard-topbar-left">
+                <span className="dashboard-title">SAP Registration</span>
+              </div>
+              <div className="dashboard-topbar-right">{today}</div>
+            </div>
+
+            <div className="sap-registration-page">
+              <section className="sap-registration-header card-surface">
+                <div>
+                  <span className="security-kicker">Profile completion</span>
+                  <h2>{sapRegistrationProfile.needsSapRegistration ? "Complete your SAP registration details" : "SAP registration details"}</h2>
+                  <p>
+                    {sapRegistrationProfile.needsSapRegistration
+                      ? "Your existing registration details are shown below. Only the missing Date of Birth and document upload can be updated."
+                      : "Your submitted SAP registration details are shown below and cannot be edited."}
+                  </p>
+                </div>
+                <div className="sap-registration-status">
+                  <AppIcon name="registration" className="security-status-icon" />
+                  {sapRegistrationProfile.needsSapRegistration ? "Pending details" : "Completed"}
+                </div>
+              </section>
+
+              <form className="sap-registration-form card-surface" onSubmit={handleSapRegistrationSubmit}>
+                {loadingSapRegistration ? (
+                  <div className="sap-registration-loading">Loading registration details...</div>
+                ) : (
+                  <>
+                    <div className="sap-name-grid">
+                      <div className="sap-edit-field">
+                        <label htmlFor="sapRegistrationFirstName">First Name *</label>
+                        <input
+                          id="sapRegistrationFirstName"
+                          type="text"
+                          value={sapRegistrationFirstName}
+                          onChange={(e) => setSapRegistrationFirstName(e.target.value)}
+                          placeholder="Enter first name"
+                          readOnly={!sapRegistrationProfile.needsSapRegistration}
+                          required
+                        />
+                      </div>
+                      <div className="sap-edit-field">
+                        <label htmlFor="sapRegistrationLastName">Last Name *</label>
+                        <input
+                          id="sapRegistrationLastName"
+                          type="text"
+                          value={sapRegistrationLastName}
+                          onChange={(e) => setSapRegistrationLastName(e.target.value)}
+                          placeholder="Enter last name"
+                          readOnly={!sapRegistrationProfile.needsSapRegistration}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="sap-readonly-grid">
+                      {profileDetailRows.map((item) => (
+                        <div key={item.label} className="sap-readonly-field">
+                          <span>{item.label}</span>
+                          <strong title={String(item.value || "")}>{item.value || "-"}</strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="sap-edit-grid">
+                      <div className="sap-edit-field">
+                        <label htmlFor="sapRegistrationDob">Date of Birth *</label>
+                        {sapRegistrationProfile.canEditDob ? (
+                          <input
+                            id="sapRegistrationDob"
+                            type="date"
+                            value={sapRegistrationDob}
+                            onChange={(e) => setSapRegistrationDob(e.target.value)}
+                            required
+                          />
+                        ) : (
+                          <div className="sap-readonly-input">{sapRegistrationProfile.dob || "-"}</div>
+                        )}
+                      </div>
+
+                      <div className="sap-edit-field">
+                        <label htmlFor="sapRegistrationDocument">Upload Document (JPG, JPEG, PDF) *</label>
+                        {sapRegistrationProfile.canUploadDocument ? (
+                          !sapRegistrationFile ? (
+                            <>
+                              <input
+                                id="sapRegistrationDocument"
+                                type="file"
+                                accept=".jpg,.jpeg,.pdf,image/jpeg,image/jpg,application/pdf"
+                                onChange={handleSapRegistrationFileChange}
+                                style={{ display: "none" }}
+                                required
+                              />
+                              <label htmlFor="sapRegistrationDocument" className="sap-upload-btn">
+                                <AppIcon name="upload" className="sap-upload-icon" />
+                                <span>Upload File</span>
+                              </label>
+                            </>
+                          ) : (
+                            <div className="sap-file-preview">
+                              <div>
+                                <strong title={sapRegistrationFile.name}>{sapRegistrationFile.name}</strong>
+                                <span>{(sapRegistrationFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                              </div>
+                              <button type="button" onClick={() => setSapRegistrationFile(null)} aria-label="Remove selected file">
+                                x
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <div className="sap-readonly-input">{sapRegistrationProfile.documentName || "Uploaded"}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {sapRegistrationMessage && <div className="security-feedback success">{sapRegistrationMessage}</div>}
+                    {sapRegistrationError && <div className="security-feedback error">{sapRegistrationError}</div>}
+
+                    {sapRegistrationProfile.needsSapRegistration && (
+                      <div className="sap-registration-actions">
+                        <button
+                          type="submit"
+                          className="primary-btn large"
+                          disabled={savingSapRegistration}
+                        >
+                          {savingSapRegistration ? "Submitting..." : "Submit Details"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </form>
+            </div>
           </>
         )}
 

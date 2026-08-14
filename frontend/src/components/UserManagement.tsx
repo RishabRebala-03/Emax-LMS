@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import "./UserManagement.css";
 import { API_BASE, apiGet, apiPost, apiDelete, apiPut } from "../services/api";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
@@ -140,6 +140,8 @@ const Icon = {
 interface User {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   userId: string;
   createdAt: string;
@@ -260,7 +262,9 @@ const DocumentDownloadButton: React.FC<{ user: User }> = ({ user }) => {
 
 const ALL_COLS: ColDef[] = [
   { key: "naxUnid",           label: "NAX_UNID",       sortable: true },
-  { key: "name",              label: "Name",            sortable: true },
+  { key: "name",              label: "Full Name",       sortable: true },
+  { key: "firstName",         label: "First Name",      sortable: true },
+  { key: "lastName",          label: "Last Name",       sortable: true },
   { key: "studentId",         label: "Student ID",      sortable: true },
   { key: "userId",            label: "User ID",         sortable: true },
   { key: "email",             label: "Personal Email",  sortable: true },
@@ -296,6 +300,8 @@ const ALL_COLS: ColDef[] = [
 const DEFAULT_COL_KEYS: (keyof User)[] = [
   "naxUnid",
   "name",
+  "firstName",
+  "lastName",
   "studentId",
   "userId",
   "email",
@@ -425,6 +431,19 @@ const EditUserModal: React.FC<{
               <label>Full Name</label>
               <input type="text" value={formData.name || ""}
                 onChange={e => set("name", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>First Name</label>
+              <input type="text" value={formData.firstName || ""}
+                onChange={e => set("firstName", e.target.value)} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Last Name</label>
+              <input type="text" value={formData.lastName || ""}
+                onChange={e => set("lastName", e.target.value)} />
             </div>
             <div className="form-group">
               <label>Personal Email</label>
@@ -582,6 +601,8 @@ const UserProfile: React.FC<{
   const fields: { label: string; value: React.ReactNode }[] = [
     { label: "NAX_UNID",           value: user.naxUnid || "—" },
     { label: "Full Name",          value: user.name },
+    { label: "First Name",         value: user.firstName || "—" },
+    { label: "Last Name",          value: user.lastName || "—" },
     { label: "Student ID",         value: user.studentId || "—" },
     { label: "User ID",            value: user.userId },
     { label: "Personal Email",     value: user.email },
@@ -684,8 +705,7 @@ const UserManagement: React.FC = () => {
   // Columns
   const [colOrder, setColOrder]           = useState<(keyof User)[]>(DEFAULT_COL_KEYS);
   const [showColPicker, setShowColPicker] = useState(false);
-  const dragColRef  = useRef<keyof User | null>(null);
-  const dragOverRef = useRef<keyof User | null>(null);
+  const [draggingCol, setDraggingCol] = useState<keyof User | null>(null);
 
   // Modals
   const [showForm, setShowForm]                 = useState(false);
@@ -721,7 +741,7 @@ const UserManagement: React.FC = () => {
   const uCerts    = useMemo(() => [...new Set(users.map(u => u.sapCertification).filter(Boolean) as string[])].sort(), [users]);
   const userSearchOptions = useMemo<ValueHelpOption[]>(() => {
     const unique = Array.from(new Set(users.flatMap((u) => [
-      u.name, u.email, u.userId, u.naxUnid, u.mobile, u.collegeName, u.courseStream, u.gender, u.sapCertification,
+      u.name, u.firstName, u.lastName, u.email, u.userId, u.naxUnid, u.mobile, u.collegeName, u.courseStream, u.gender, u.sapCertification,
     ]).filter(Boolean) as string[]));
     return unique.slice(0, 40).map((item) => ({ value: item, label: item }));
   }, [users]);
@@ -769,23 +789,33 @@ const UserManagement: React.FC = () => {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const handleDragStart = (key: keyof User) => { dragColRef.current = key; };
-  const handleDragOver  = (e: React.DragEvent, key: keyof User) => { e.preventDefault(); dragOverRef.current = key; };
-  const handleDrop = () => {
-    const from = dragColRef.current; const to = dragOverRef.current;
-    if (!from || !to || from === to) return;
+  const reorderColumn = (from: keyof User, to: keyof User) => {
+    if (from === to) return;
     setColOrder(prev => {
       const arr = [...prev];
-      const fi = arr.indexOf(from); const ti = arr.indexOf(to);
-      arr.splice(fi, 1); arr.splice(ti, 0, from);
+      const fromIndex = arr.indexOf(from);
+      const toIndex = arr.indexOf(to);
+      if (fromIndex < 0 || toIndex < 0) return prev;
+      arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, from);
       return arr;
     });
-    dragColRef.current = null; dragOverRef.current = null;
   };
 
   const toggleCol = (key: keyof User) => {
     setColOrder(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
+
+  useEffect(() => {
+    if (!draggingCol) return;
+    const stopDragging = () => setDraggingCol(null);
+    window.addEventListener("pointerup", stopDragging);
+    window.addEventListener("blur", stopDragging);
+    return () => {
+      window.removeEventListener("pointerup", stopDragging);
+      window.removeEventListener("blur", stopDragging);
+    };
+  }, [draggingCol]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -985,15 +1015,55 @@ const UserManagement: React.FC = () => {
             </div>
           </div>
           <div className="um-col-grid">
-            {ALL_COLS.map(col => (
-              <label key={col.key} className={`um-col-tag ${colOrder.includes(col.key) ? "on" : "off"}`}
-                draggable onDragStart={() => handleDragStart(col.key)}
-                onDragOver={e => handleDragOver(e, col.key)} onDrop={handleDrop}>
-                <input type="checkbox" checked={colOrder.includes(col.key)} onChange={() => toggleCol(col.key)} />
-                <span className="um-col-drag-handle"><Icon.GripVertical /></span>
-                {col.label}
-              </label>
-            ))}
+            {ALL_COLS.map(col => {
+              const isVisible = colOrder.includes(col.key);
+              return (
+                <div
+                  key={col.key}
+                  className={`um-col-chip ${isVisible ? "on" : "off"} ${draggingCol === col.key ? "dragging" : ""}`}
+                  onClick={() => {
+                    if (!isVisible) {
+                      toggleCol(col.key);
+                    }
+                  }}
+                  onPointerEnter={() => {
+                    if (draggingCol && isVisible) {
+                      reorderColumn(draggingCol, col.key);
+                    }
+                  }}
+                >
+                  {isVisible && (
+                    <button
+                      type="button"
+                      className="um-col-grip"
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        setDraggingCol(col.key);
+                      }}
+                      title="Hold and move over another active column to reorder"
+                    >
+                      <Icon.GripVertical />
+                    </button>
+                  )}
+                  {!isVisible && (
+                    <span className="um-col-grip disabled">
+                      <Icon.GripVertical />
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="um-col-label"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleCol(col.key);
+                    }}
+                    title={isVisible ? `Hide ${col.label}` : `Show ${col.label}`}
+                  >
+                    {col.label}
+                  </button>
+                </div>
+              );
+            })}
           </div>
           <p className="um-col-hint">Drag column chips to reorder them in the table</p>
         </div>
@@ -1114,16 +1184,12 @@ const UserManagement: React.FC = () => {
           <thead>
             <tr>
               {visibleColDefs.map(col => (
-                <th key={col.key} draggable
-                  onDragStart={() => handleDragStart(col.key)}
-                  onDragOver={e => handleDragOver(e, col.key)}
-                  onDrop={handleDrop}
+                <th key={col.key}
                   onClick={() => col.sortable && handleSort(col.key)}
                   className={`um-th ${col.sortable ? "sortable" : ""}`}
-                  title="Click to sort · Drag to reorder"
+                  title="Click to sort"
                 >
                   <span className="um-th-content">
-                    <span className="um-th-drag"><Icon.GripVertical /></span>
                     {col.label}
                     {col.sortable && (
                       <span className={`sort-icon ${sortKey === col.key ? "active" : ""}`}>

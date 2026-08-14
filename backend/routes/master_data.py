@@ -246,6 +246,9 @@ def student_register():
     default_password = "Welcome@123"
     student_id = data["studentId"].strip()
     student_name = data["studentName"].strip()
+    name_parts = student_name.split()
+    first_name = str(data.get("firstName") or (name_parts[0] if name_parts else "")).strip()
+    last_name = str(data.get("lastName") or (" ".join(name_parts[1:]) if len(name_parts) > 1 else "")).strip()
     email = data["email"].strip().lower()
     college_email = data["collegeEmail"].strip().lower()
     dob = data["dob"].strip()
@@ -254,6 +257,8 @@ def student_register():
     reg_doc = {
         "naxUnid": nax_unid,
         "studentName": student_name,
+        "firstName": first_name,
+        "lastName": last_name,
         "studentId": student_id,
         "email": email,
         "collegeEmail": college_email,
@@ -274,6 +279,8 @@ def student_register():
     # 2. Insert into users so student can login immediately
     user_doc = {
         "name": student_name,
+        "firstName": first_name,
+        "lastName": last_name,
         "email": email,
         "userId": nax_unid,
         "naxUnid": nax_unid,
