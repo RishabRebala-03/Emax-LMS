@@ -251,11 +251,6 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
       alert("Please select your Date of Birth.");
       return;
     }
-    if (!selectedFile) {
-      alert("Please upload your document (JPG, JPEG, or PDF).");
-      return;
-    }
-
     setIsLoading(true);
     try {
       const fd = new FormData();
@@ -270,7 +265,9 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
       fd.append("sapCertification", formData.sapCertification);
       fd.append("collegeName", formData.collegeName);
       fd.append("dob", formData.dob);
-      fd.append("document", selectedFile);
+      if (selectedFile) {
+        fd.append("document", selectedFile);
+      }
 
       const res = await apiPostForm<{ naxUnid: string }>("/public/register", fd);
 
@@ -404,7 +401,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
               </div>
             </div>
 
-            {/* Row 6: DOB & Upload Document */}
+            {/* Row 6: DOB & Optional Upload Document */}
             <div className="reg-form-row">
               <div className="form-group">
                 <label htmlFor="dob">Date of Birth *</label>
@@ -414,7 +411,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
               </div>
 
               <div className="form-group">
-                <label htmlFor="docUpload">Upload Document (JPG, JPEG, PDF) *</label>
+                <label htmlFor="docUpload">Upload Document (JPG, JPEG, PDF)</label>
                 {!selectedFile ? (
                   <>
                     <input
@@ -423,7 +420,6 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
                       accept=".jpg,.jpeg,.pdf,image/jpeg,image/jpg,application/pdf"
                       onChange={handleFileChange}
                       style={{ display: "none" }}
-                      required
                     />
                     <label htmlFor="docUpload" className="upload-btn-main">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -459,7 +455,7 @@ const StudentRegistration: React.FC<StudentRegistrationProps> = ({ onBack }) => 
             </div>
 
             <button type="submit" className="submit-btn" disabled={isLoading || isMasterLoading}>
-              {isLoading ? "Registering & Uploading..." : "Register"}
+              {isLoading ? "Registering..." : "Register"}
             </button>
           </form>
 
