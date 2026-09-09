@@ -2,18 +2,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import TestInterface from "./TestInterface";
 import StudentCourses from "./StudentCourses";
 import InterviewPrep from "./InterviewPrep";
+import Sessions from "./Sessions";
 import "./AnswererDashboard.css";
 import { apiGet, apiPost } from "../services/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import AppIcon from "./AppIcons";
 
-type AnswererView = "dashboard" | "tests" | "history" | "courses" | "account-security" | "interview-prep";
+type AnswererView = "dashboard" | "tests" | "history" | "courses" | "sessions" | "account-security" | "interview-prep";
 
 const viewToPath: Record<AnswererView, string> = {
   'dashboard': '/dashboard',
   'tests': '/dashboard/tests',
   'history': '/dashboard/history',
   'courses': '/dashboard/courses',
+  'sessions': '/dashboard/sessions',
   'account-security': '/dashboard/account-security',
   'interview-prep': '/dashboard/interview-prep',
 };
@@ -23,6 +25,7 @@ const pathToView: Record<string, AnswererView> = {
   '/dashboard/tests': 'tests',
   '/dashboard/history': 'history',
   '/dashboard/courses': 'courses',
+  '/dashboard/sessions': 'sessions',
   '/dashboard/account-security': 'account-security',
   '/dashboard/interview-prep': 'interview-prep',
 };
@@ -461,6 +464,14 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
             </button>
 
             <button
+              className={`nav-item ${activeView === "sessions" ? "active" : ""}`}
+              onClick={() => setActiveView("sessions")}
+            >
+              <AppIcon name="sessions" className="nav-icon" />
+              GUI Installation
+            </button>
+
+            <button
               className={`nav-item ${activeView === "history" ? "active" : ""}`}
               onClick={() => setActiveView("history")}
             >
@@ -714,6 +725,19 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
             </div>
 
             <StudentCourses userId={userName} />
+          </>
+        )}
+
+        {activeView === "sessions" && (
+          <>
+            <div className="dashboard-topbar">
+              <div className="dashboard-topbar-left">
+                <span className="dashboard-title">GUI Installation</span>
+              </div>
+              <div className="dashboard-topbar-right">{today}</div>
+            </div>
+
+            <Sessions />
           </>
         )}
 

@@ -51,10 +51,12 @@ function App() {
     }
   }, []);
 
-  const handleLogin = (role: UserRole, userId: string, sessionToken: string) => {
+  const handleLogin = (role: UserRole, userId: string, sessionToken?: string) => {
     sessionStorage.setItem('role', role);
     sessionStorage.setItem('userId', userId);
-    sessionStorage.setItem('sessionToken', sessionToken);
+    if (sessionToken) {
+      sessionStorage.setItem('sessionToken', sessionToken);
+    }
     setCurrentRole(role);
     setCurrentUser(userId);
     navigate(role === 'admin' ? '/admin' : '/dashboard');
@@ -71,11 +73,20 @@ function App() {
   // replacement here and are returned to the login screen.
   useEffect(() => {
     if (!currentRole || !currentUser) return;
+    const token = sessionStorage.getItem('sessionToken');
+    if (!token) return;
+
     const check = async () => {
       try {
-        await apiGet(`/auth/session?userId=${encodeURIComponent(currentUser)}&role=${currentRole}`);
-      } catch {
-        handleLogout();
+        const res = await apiGet<{ valid: boolean }>(`/auth/session?userId=${encodeURIComponent(currentUser)}&role=${currentRole}`);
+        if (res && res.valid === false) {
+          handleLogout();
+        }
+      } catch (err: any) {
+        // Only log out if explicitly unauthorized (401 / 403), NOT on transient network glitches
+        if (err && (err.status === 401 || err.status === 403)) {
+          handleLogout();
+        }
       }
     };
     const timer = window.setInterval(check, 5000);

@@ -7,6 +7,7 @@ type IconName =
   | "tests"
   | "results"
   | "courses"
+  | "sessions"
   | "maintenance"
   | "history"
   | "completed"
@@ -88,6 +89,12 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <path d="M5 17a7 7 0 1 1 14 0" />
       <path d="m12 12 4-4" />
       <path d="M12 12h.01" />
+    </>
+  ),
+  sessions: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m10 9 5 3-5 3V9Z" />
     </>
   ),
   security: (
