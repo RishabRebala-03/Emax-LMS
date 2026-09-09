@@ -468,7 +468,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
               onClick={() => setActiveView("sessions")}
             >
               <AppIcon name="sessions" className="nav-icon" />
-              GUI Installation
+              Live Sessions
             </button>
 
             <button
@@ -732,12 +732,12 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
           <>
             <div className="dashboard-topbar">
               <div className="dashboard-topbar-left">
-                <span className="dashboard-title">GUI Installation</span>
+                <span className="dashboard-title">Live Sessions</span>
               </div>
               <div className="dashboard-topbar-right">{today}</div>
             </div>
 
-            <Sessions />
+            <Sessions userId={userName} />
           </>
         )}
 

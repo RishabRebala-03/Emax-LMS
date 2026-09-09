@@ -584,6 +584,88 @@ def list_assigned_courses():
     return jsonify({"courses": to_jsonable(out)})
 
 
+@answerer_bp.get("/live-sessions")
+def list_assigned_live_sessions():
+    userId = (request.args.get("userId") or "").strip()
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    assignments = list(db.live_session_assignments.find({"userId": userId, "status": "assigned"}))
+    session_ids = [assignment.get("sessionId") for assignment in assignments if assignment.get("sessionId")]
+    sessions = list(db.live_sessions.find({"_id": {"$in": session_ids}, "status": "active"})) if session_ids else []
+
+    out = []
+    for session in sessions:
+        out.append({
+            "id": str(session["_id"]),
+            "dayNumber": int(session.get("dayNumber", 1)),
+            "title": session.get("title") or f"Day {int(session.get('dayNumber', 1))}",
+            "sessionUrl": session.get("sessionUrl", ""),
+        })
+
+    out.sort(key=lambda item: (item["dayNumber"], item["title"].lower()))
+    return jsonify({"sessions": to_jsonable(out)})
+
+
+@answerer_bp.get("/live-sessions/history")
+def list_live_session_history():
+    userId = (request.args.get("userId") or "").strip()
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    events = list(db.live_session_joins.find({"userId": userId}).sort("joinedAt", -1).limit(100))
+    out = []
+    for event in events:
+        out.append({
+            "id": str(event["_id"]),
+            "sessionId": str(event.get("sessionId", "")),
+            "dayNumber": int(event.get("dayNumber", 1)),
+            "title": event.get("title", ""),
+            "sessionUrl": event.get("sessionUrl", ""),
+            "joinedAt": event.get("joinedAt"),
+        })
+    return jsonify({"history": to_jsonable(out)})
+
+
+@answerer_bp.post("/live-sessions/<session_id>/join")
+def record_live_session_join(session_id: str):
+    payload = request.get_json(silent=True) or {}
+    userId = str(payload.get("userId") or "").strip()
+    if not userId:
+        return jsonify({"error": "userId is required"}), 400
+
+    try:
+        oid = ObjectId(session_id)
+    except Exception:
+        return jsonify({"error": "Invalid session id"}), 400
+
+    db = get_db()
+    assignment = db.live_session_assignments.find_one({"sessionId": oid, "userId": userId, "status": "assigned"})
+    if not assignment:
+        return jsonify({"error": "Live session not assigned to this user"}), 403
+
+    session = db.live_sessions.find_one({"_id": oid, "status": "active"})
+    if not session:
+        return jsonify({"error": "Live session not found"}), 404
+
+    now = datetime.utcnow()
+    db.live_session_joins.insert_one({
+        "sessionId": oid,
+        "userId": userId,
+        "dayNumber": int(session.get("dayNumber", 1)),
+        "title": session.get("title") or f"Day {int(session.get('dayNumber', 1))}",
+        "sessionUrl": session.get("sessionUrl", ""),
+        "joinedAt": now,
+    })
+
+    return jsonify({
+        "sessionUrl": session.get("sessionUrl", ""),
+        "joinedAt": now,
+    })
+
+
 @answerer_bp.get("/courses/<course_id>/materials")
 def get_course_materials(course_id: str):
     userId = (request.args.get("userId") or "").strip()

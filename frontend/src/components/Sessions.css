@@ -1,93 +1,112 @@
 .sessions-page {
-  max-width: 70rem;
+  max-width: 76rem;
   margin: 0 auto;
 }
 
 .sessions-intro {
-  margin-bottom: 1.5rem;
-}
-
-.sessions-eyebrow {
-  display: inline-block;
-  margin-bottom: 0.45rem;
-  color: #0070f2;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  margin-bottom: 1.4rem;
 }
 
 .sessions-intro h2 {
   margin: 0;
-  color: #1d2d3e;
+  color: #111827;
   font-size: 1.75rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.sessions-intro p,
-.session-card-footer p {
-  margin: 0.5rem 0 0;
-  color: #6a6d70;
+.sessions-intro p {
+  margin: 0.45rem 0 0;
+  color: #6b7280;
+  font-size: 0.98rem;
 }
 
-.session-card {
-  overflow: hidden;
+.live-session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.25rem, 1fr));
+  gap: 1.25rem;
+}
+
+.live-session-tile {
+  min-height: 10.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.95rem;
+  padding: 1.25rem 1rem;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.session-video-frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #101828;
+.live-session-tile:hover {
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.1);
+  transform: translateY(-0.15rem);
 }
 
-.session-video-frame video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.session-resource-link {
-  display: block;
-  margin-top: 0.5rem;
-  color: #0064d9;
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-  text-decoration: underline;
-}
-
-.session-card-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-}
-
-.session-card-footer p {
-  margin: 0;
-  font-size: 0.875rem;
-}
-
-.session-view-only {
-  flex: 0 0 auto;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
+.live-session-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
   background: #ebf5ff;
   color: #0070f2;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
 }
 
-@media (max-width: 600px) {
-  .session-card-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.45rem;
+.live-session-icon svg {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.live-session-tile h3 {
+  margin: 0;
+  max-width: 100%;
+  color: #1d2d3e;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.live-session-tile button {
+  width: 100%;
+  min-height: 2.35rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: #0070f2;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.live-session-tile button:hover {
+  background: #0057d2;
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 112, 242, 0.22);
+}
+
+.sessions-empty {
+  padding: 1.25rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  color: #6b7280;
+}
+
+@media (max-width: 640px) {
+  .live-session-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
   }
+
+  .live-session-tile {
+    min-height: 9.5rem;
+  }
+
 }
