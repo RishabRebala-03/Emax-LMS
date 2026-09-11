@@ -402,6 +402,7 @@
   border: 1px solid #cbd5e1;
   border-radius: 0.25rem;
   color: #475569;
+  white-space: pre-wrap;
 }
 
 .preview-opt.correct {

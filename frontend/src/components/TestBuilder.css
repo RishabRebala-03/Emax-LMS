@@ -109,13 +109,15 @@
   margin-bottom: 1rem;
 }
 
-.option-input input[type="text"] {
+.option-input textarea {
   flex: 1;
   padding: 0.75rem 1rem;
   border: 0.0625rem solid #d9d9d9;
   border-radius: 0.25rem;
   font-size: 0.875rem;
   font-family: inherit;
+  line-height: 1.4;
+  resize: vertical;
 }
 
 .option-input input[type="radio"],
@@ -229,6 +231,7 @@
   margin-bottom: 0.5rem;
   font-size: 0.875rem;
   color: #1d2d3e;
+  white-space: pre-wrap;
 }
 
 .options-list li.correct-option {
@@ -363,4 +366,4 @@
 .q-inline-table th {
   background: #f0f4f8;
   font-weight: 600;
-}
+}

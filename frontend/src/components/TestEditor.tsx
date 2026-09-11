@@ -662,11 +662,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
                 </div>
                 {questionForm.options.map((option, index) => (
                   <div key={index} className="option-input">
-                    <input
-                      type="text"
+                    <textarea
                       value={option}
                       onChange={(e) => handleOptionChange(index, e.target.value)}
                       placeholder={`Option ${index + 1}`}
+                      rows={2}
                     />
                     {questionForm.type === 'mcq' ? (
                       <input
@@ -799,10 +799,10 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
                             </div>
                             {inlineForm.options.map((opt, optIdx) => (
                               <div key={optIdx} className="option-input" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                <input
-                                  type="text"
+                                <textarea
                                   value={opt}
                                   placeholder={`Option ${optIdx + 1}`}
+                                  rows={2}
                                   onChange={e => {
                                     const nextOpts = [...inlineForm.options];
                                     nextOpts[optIdx] = e.target.value;

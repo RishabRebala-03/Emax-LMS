@@ -46,6 +46,7 @@
   line-height: 1.5;
   flex: 1;
   text-align: left;
+  white-space: pre-wrap;
 }
 
 .question-header {
@@ -154,4 +155,4 @@
 .q-inline-table th {
   background: #f0f4f8;
   font-weight: 600;
-}
+}

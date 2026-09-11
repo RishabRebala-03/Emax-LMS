@@ -437,8 +437,12 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                 </div>
                 {questionForm.options.map((option, index) => (
                   <div key={index} className="option-input">
-                    <input type="text" value={option} placeholder={`Option ${index + 1}`}
-                      onChange={e => handleOptionChange(index, e.target.value)} />
+                    <textarea
+                      value={option}
+                      placeholder={`Option ${index + 1}`}
+                      rows={2}
+                      onChange={e => handleOptionChange(index, e.target.value)}
+                    />
                     {questionForm.type === 'mcq' ? (
                       <input type="radio" name="correct"
                         checked={questionForm.correctAnswer === option}
@@ -548,10 +552,10 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                             </div>
                             {inlineForm.options.map((opt, optIdx) => (
                               <div key={optIdx} className="option-input" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                <input
-                                  type="text"
+                                <textarea
                                   value={opt}
                                   placeholder={`Option ${optIdx + 1}`}
+                                  rows={2}
                                   onChange={e => {
                                     const nextOpts = [...inlineForm.options];
                                     nextOpts[optIdx] = e.target.value;
