@@ -464,14 +464,6 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
             </button>
 
             <button
-              className={`nav-item ${activeView === "sessions" ? "active" : ""}`}
-              onClick={() => setActiveView("sessions")}
-            >
-              <AppIcon name="sessions" className="nav-icon" />
-              Live Sessions
-            </button>
-
-            <button
               className={`nav-item ${activeView === "history" ? "active" : ""}`}
               onClick={() => setActiveView("history")}
             >

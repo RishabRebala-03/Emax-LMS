@@ -234,13 +234,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) 
             Courses
           </button>
           <button
-            className={`nav-item ${currentView === 'live-sessions' ? 'active' : ''}`}
-            onClick={() => setCurrentView('live-sessions')}
-          >
-            <AppIcon name="sessions" className="nav-icon" />
-            Live Sessions
-          </button>
-          <button
             className={`nav-item ${currentView === 'interview-prep' ? 'active' : ''}`}
             onClick={() => setCurrentView('interview-prep')}
           >
